@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="description"
+        content="Long-term Effective Any Point Tracking for Visual Odometry">
+  <meta name="keywords" content="LEAPVO, visual odometry">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LEAP-VO: Long-term Effective Any Point Tracking for Visual Odometry</title>
+
+  <!-- Global site tag (gtag.js) - Google Analytics -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-PYVRSFMDRL"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+
+    function gtag() {
+      dataLayer.push(arguments);
+    }
+
+    gtag('js', new Date());
+
+    gtag('config', 'G-PYVRSFMDRL');
+  </script>
+
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro"
+        rel="stylesheet">
+
+  <link rel="stylesheet" href="./static/css/bulma.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-carousel.min.css">
+  <link rel="stylesheet" href="./static/css/bulma-slider.min.css">
+  <link rel="stylesheet" href="./static/css/fontawesome.all.min.css">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="./static/css/index.css">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="./static/js/fontawesome.all.min.js"></script>
+  <script src="./static/js/bulma-carousel.min.js"></script>
+  <script src="./static/js/bulma-slider.min.js"></script>
+  <script src="./static/js/index.js"></script>
+</head>
+<body>
+
+<section class="hero">
+  <div class="hero-body">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <h1 class="title is-1 publication-title">LEAP-VO: Long-term Effective Any Point Tracking for Visual Odometry</h1>
+          <div class="is-size-5 publication-authors">
+            <span class="author-block">
+              <a href="https://scholar.google.com/citations?hl=en&user=50yGm5wAAAAJ">Weirong Chen</a><sup>1</sup>,</span>
+            <span class="author-block">
+              <a href="https://clthegoat.github.io/">Le Chen</a><sup>2</sup>,</span>
+            <span class="author-block">
+              <a href="https://rui2016.github.io/">Rui Wang</a><sup>3</sup>,
+            </span>
+            <span class="author-block">
+              <a href="https://people.inf.ethz.ch/marc.pollefeys/">Marc Pollefeys</a><sup>1,3</sup>
+            </span>           
+          </div>
+
+          <div class="is-size-5 publication-authors">
+            <span class="author-block"><sup>1</sup>ETH Zürich,</span>
+            <span class="author-block"><sup>2</sup>Max Planck Institute for Intelligent Systems,</span>
+            <span class="author-block"><sup>3</sup>Microsoft</span>
+          </div>
+
+          
+          <div class="column has-text-centered">
+            <div class="publication-links">
+              <!-- PDF Link. -->
+              <span class="link-block">
+                <a href="https://arxiv.org/abs/2401.01887"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fas fa-file-pdf"></i>
+                  </span>
+                  <span>Paper</span>
+                </a>
+              </span>
+              <span class="link-block">
+                <a href="https://arxiv.org/abs/2401.01887"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="ai ai-arxiv"></i>
+                  </span>
+                  <span>arXiv</span>
+                </a>
+              </span>
+              <!-- Video Link. -->
+              <!-- <span class="link-block">
+                <a href="#overview_video"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fab fa-youtube"></i>
+                  </span>
+                  <span>Video</span>
+                </a>
+              </span> -->
+              <!-- Supp Link. -->
+              <!-- <span class="link-block">
+                <a href="static/pdfs/supp.pdf"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fas fa-file-pdf"></i>
+                  </span>
+                  <span>Supp</span>
+                </a>
+              </span> -->
+              <!-- Code Link. -->
+              <span class="link-block">
+                <a href=""
+                class="external-link button is-normal is-rounded is-dark" disabled="">
+               <span class="icon">
+                   <i class="fab fa-github"></i>
+               </span>
+               <span>Code</span>
+               </a>
+              </span>
+              <!-- Dataset Link. -->
+              <!-- <span class="link-block">
+                <a href="https://github.com/google/nerfies/releases/tag/0.1"
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="far fa-images"></i>
+                  </span>
+                  <span>Data</span>
+                  </a>
+              </span> -->
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<section class="hero teaser">
+  <div class="container is-max-desktop">
+    <div class="hero-body">
+      <video id="teaser" autoplay muted loop playsinline controls width="100%">
+        <source src="static/videos/sintel_market_5.mp4" type="video/mp4">
+      </video>
+      <h2 class="subtitle has-text-centered">
+        <strong>LEAP-VO</strong> leverages long-term point tracking to build a robust visual odometry system that excels in managing occlusions and dynamic environments.
+      </h2>
+    </div>
+  </div>
+</section>
+
+
+
+
+
+<section class="section">
+  <div class="container is-max-desktop">
+    <!-- Abstract. -->
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Abstract</h2>
+        <div class="content has-text-justified">
+          <p>
+            Visual odometry estimates the motion of a moving camera based on visual input. 
+            Existing methods, mostly focusing on two-view point tracking, often ignore the rich temporal context in the image sequence, 
+            thereby overlooking the global motion patterns and providing no assessment of the full trajectory reliability. 
+            These shortcomings hinder performance in scenarios with occlusion, dynamic objects, 
+            and low-texture areas. To address these challenges, we present the Long-term Effective Any Point Tracking (LEAP) module. 
+            LEAP innovatively combines visual, inter-track, and temporal cues with mindfully selected anchors for dynamic track estimation. 
+            Moreover, LEAP's temporal probabilistic formulation integrates distribution updates into a learnable iterative refinement module to reason about point-wise uncertainty.
+            Based on these traits, we develop LEAP-VO, a robust visual odometry system adept at handling occlusions and dynamic scenes. 
+            Our mindful integration showcases a novel practice by employing long-term point tracking as the front-end. 
+            Extensive experiments demonstrate that the proposed pipeline significantly outperforms existing baselines across various visual odometry benchmarks.
+          </p>
+        </div>
+      </div>
+    </div>
+    <!--/ Abstract. -->
+
+<!-- <div align="center" style="margin-top:80px;" style="margin-bottom:120px;">
+<img style='height: auto; width: 75%; object-fit: contain' src="static/images/overview.png" alt="overview_image">
+</div>  -->
+
+    <!-- Paper video. -->
+    <!-- <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <h2 class="title is-3">Video</h2>
+        <a id="overview_video"></a>
+          <video id="teaser" playsinline controls width="100%">
+            <source src="static/videos/overview_video.mp4" type="video/mp4">
+          </video>
+      </div>
+    </div> -->
+    <!--/ Paper video. -->
+  </div>
+</section>
+
+<section class="section">
+  <div class="container is-max-desktop">
+    <!-- Abstract. -->
+    <div class="columns is-centered has-text-centered">
+      <div class="column">
+        <h2 class="title is-3">Method</h2>
+        <!-- <h3 class="title is-4">LEAP Front-end</h3> -->
+        <div class="content has-text-justified">
+          <p>
+            <strong>LEAP Front-end:</strong> After extracting image feature maps, selected anchors assist in tracking. 
+            The queries and anchors are processed by a refiner to iteratively update states, aggregating channel, inter-track, and temporal information. 
+            The LEAP tracker outputs trajectory distribution, visibility, and dynamic track labels.
+          </p>
+        </div>
+        <img src="./static/images/leap_frontend.png"
+                  class="teaser-fig"
+                  width="70%"
+                  alt="teaser-fig."/>
+        <!-- <h3 class="title is-4">LEAP VO</h3> -->
+        <div class="content has-text-justified">
+                    <p>
+                      <strong>LEAP-VO:</strong> Given a new image, the feature extractor extracts new keypoints from the incoming image. 
+                      Then, all the keypoints are tracked across all other frames within the current LEAP window, followed by a track filtering step to remove outliers. 
+                      Finally, the local BA module is used on the current BA window to update the camera poses and 3D positions of the extracted keypoints. 
+                    </p>
+                    </div>
+        <img src="./static/images/leap_vo.png"
+        class="teaser-fig"
+        alt="teaser-fig."/>
+
+
+      </div>
+    </div>
+    <!--/ Abstract. -->
+  </div>
+</section>
+
+<section class="section">
+    <div class="container is-max-desktop">
+      <!-- Exp. -->
+      <div class="columns is-centered has-text-centered">
+        <div class="column">
+          <h2 class="title is-3">Qualitative Results</h2>
+          <div class="content has-text-justified">
+            <p>
+            Qualitative results for Visual Odometry on MPI-Sintel.
+            Upper left: image sample with static (green) point tracking. 
+            Lower left: image sample with dynamic (red) and uncertain (yellow) point tracking. 
+            Right: comparison with the state-of-the-art VO methods. 
+            </p>
+          </div>
+  
+        </div>
+      </div>
+      <!--/ Exp. -->
+    </div>
+</section>
+
+  <section class="hero is-light is-small">
+    <div class="hero-body">
+      <div class="container">
+        <div id="results-carousel" class="carousel results-carousel">
+          <div class="item item-fullbody">
+            <video poster="" id="fullbody" autoplay playsinline controls muted loop height="100%">
+              <source src="static/videos/sintel_market_5.mp4"
+                      type="video/mp4">
+            </video>
+          </div>
+  
+          <div class="item item-shiba">
+            <video poster="" id="shiba" autoplay playsinline controls muted loop height="100%">
+              <source src="static/videos/sintel_temple_2.mp4"
+                      type="video/mp4">
+            </video>
+          </div>
+          <div class="item item-toby">
+            <video poster="" id="toby" autoplay playsinline controls muted loop height="100%">
+              <source src="static/videos/sintel_market_6.mp4"
+                      type="video/mp4">
+            </video>
+          </div>
+          <div class="item item-chair-tp">
+            <video poster="" id="chair-tp" autoplay playsinline controls muted loop width="100%">
+              <source src="static/videos/sintel_sleeping_2.mp4"
+                      type="video/mp4">
+            </video>
+          </div>
+          <div class="item item-chair-tp">
+            <video poster="" id="chair-tp" autoplay playsinline controls muted loop width="100%">
+              <source src="static/videos/sintel_market_2.mp4"
+                      type="video/mp4">
+            </video>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="section">
+    <div class="container is-max-desktop">
+      <!-- Exp. -->
+      <div class="columns is-centered has-text-centered">
+        <div class="column">  
+          <h2 class="title is-3">Dynamic Track Estimation</h3>
+          <div class="content has-text-justified">
+            <p>
+              Visualization of dynamic track estimation on DAVIS, MPI-Sintel, and TartanAir-Shibuya.
+              Odd columns: all point trajectories. Even columns:  estimated dynamic point trajectories.
+            </p>
+          </div>
+          <img src="./static/images/dyn_combine.png"
+                    class="teaser-fig"
+                    alt="teaser-fig."/>
+        </div>
+      </div>
+      <!--/ Exp. -->
+    </div>
+  </section>
+
+  <section class="section" id="BibTeX">
+  <div class="container is-max-desktop content">
+    <h2 class="title">BibTeX</h2>
+    <pre><code>@article{chen2024leapvo,
+        title={LEAP-VO: Long-term Effective Any Point Tracking for Visual Odometry}, 
+        author={Weirong Chen and Le Chen and Rui Wang and Marc Pollefeys},
+        journal={arXiv},
+        year={2024}
+}</code></pre>
+  </div>
+</section>
+
+
+
+<footer class="footer">
+  <div align="center" class="container">
+    <div class="columns is-centered">
+        <div class="content">
+            This website is borrowed from <a href="https://github.com/3d-moments/3d-moments.github.io">3D Moments website</a>.
+        </div>
+      </div>
+    </div>
+</footer>
+
+
+</body>
+</html>
