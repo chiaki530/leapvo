@@ -1,0 +1,15 @@
+*~
+*#*
+*pyc
+#.*
+.DS_Store
+*.out
+*.gif
+*.zip
+slurm_logs
+logs_*
+log_*
+__pycache__
+logs
+outputs
+weights

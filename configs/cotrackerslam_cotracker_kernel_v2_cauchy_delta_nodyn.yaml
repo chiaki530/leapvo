@@ -1,0 +1,112 @@
+slam:
+  MOTION_DAMPING: 0.5
+  MOTION_MODEL: 'DAMPED_LINEAR'
+
+  REMOVAL_WINDOW: 20
+  OPTIMIZATION_WINDOW: 15
+  PATCH_LIFETIME: 12
+
+  PATCHES_PER_FRAME: 64
+  BUFFER_SIZE: 1024
+
+  PATCH_GEN: grid_grad_8
+  
+  ITER: 4
+
+  LOSS: huber
+
+  USE_RANSAC: false
+  RANSAC_MODE: neighbor
+  RANSAC_THRESH: 1.0
+
+  USE_MAP_FILTERING: true
+  MAP_FILTERING_TH: 5
+  MIN_VALID_PATCH: 0
+
+  USE_SCALE_NORM: false
+
+  MIN_TRACK_LEN: 3
+  EDGE_WEIGHT_DECAY: 1.0
+
+  # MAX_FRAME_DIST: 8
+  
+  GT_FILTERING: 0
+
+  TRAJ_INIT: false
+
+  VIS_THRESHOLD: 0.0
+  # STATIC_THRESHOLD: 0.9
+  # STATIC_QUANTILE: 0.0
+  CONF_THRESHOLD: 1.0
+  CONF_QUANTILE: 0.9
+  
+  S_slam: 16
+  kf_stride: 4
+  num_init: 16
+  backward_tracking: False
+
+visualizer:
+  save_dir: "./results"
+  grayscale: false
+  pad_value: 0
+  fps: 10
+  mode: "rainbow"  # 'cool', 'optical_flow'
+  linewidth: 2
+  show_first_frame: 10
+  tracks_leave_trace: 0  # -1 for infinite
+
+data:
+  imagedir: /media/weirchen/T7/datasets/Replica_Dataset/office_0/Sequence_1
+  calib: /local/home/weirchen/Research/projects/pips/pips_slam/calibs/replica.txt
+  stride: 1
+  skip: 0
+  max_length: 900
+  gt_traj: ''
+  name: ''
+  savedir: ''
+  traj_format: replica
+
+model:
+  S: 8
+  I: 4
+  stride: 4
+
+  mode: cotracker_kernel_v2
+  sliding_window_len: 8
+  model_stride: 4
+  hidden_dim: 256
+  latent_dim: 128
+  corr_levels: 4
+  corr_radius: 3
+  add_space_attn: true
+  space_depth: 6
+  time_depth: 6
+  hidden_size: 384
+  num_heads: 8
+  kernel_from_delta: true
+  kernel_block:
+    kernel_list:
+    - linear
+    composition: sum
+    add_time: false
+  motion_label_block:
+    mode: mlp_v1
+    in_dim: 128
+    hidden_dim: 256
+    S: 8
+  init_dir: weights/resume_cauchy_delta_notime_anchor_nll1_50k_lr3e-4_20231114/11-15_01-40-57/checkpoints/cotracker_kernel_v2_final.pth
+
+use_gt_traj: false
+# gt_traj_noise: gauss_6.0
+exp_name: 'pipsmulti_pips_multi_ours_val10_random_p64_iter4_huber_track3_fdist3'
+# exp_name: 'gt_gauss_6.0_random_p64_iter4_huber_ransac_neighbor_track3'
+output_dir: pips_slam/outputs/replica_office_0_Sequence_1/pipsmultislam
+save_trajectory: true
+save_pips: true
+save_pips_min_ate: 5.0
+save_results: false
+save_video: false
+plot: true
+# pred_back: true
+viz: false
+load_gt: false
