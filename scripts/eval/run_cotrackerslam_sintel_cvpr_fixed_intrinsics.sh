@@ -4,10 +4,10 @@ SAVEDIR=logs/mpi_sintel/cotracker_kernel_v2_cauchy_delta_kf2_S12_init8_s0.1_conf
 mkdir -p $SAVEDIR
 echo $(date "+%Y-%m-%d %H:%M:%S") >> $SAVEDIR/error_sum.txt
 # alley_2 ambush_4 ambush_5 ambush_6 cave_2 cave_4 market_2 market_5 market_6 shaman_3 sleeping_1 sleeping_2 temple_2 temple_3
-for SCENE in alley_2 ambush_4 ambush_5 ambush_6 cave_2 cave_4 market_2 market_5 market_6 shaman_3 sleeping_1 sleeping_2 temple_2 temple_3
+for SCENE in alley_2
 do
     SCENE_PATH=$DATASET/final/$SCENE
-    python leapvo/cotrackerslam.py \
+    python src/run.py \
     --config-path=../configs \
     --config-name=cotrackerslam_cotracker_kernel_v2_cauchy_delta \
     data.imagedir=$SCENE_PATH \

@@ -18,21 +18,21 @@ from omegaconf import DictConfig
 import hydra
 
 
-from leapvo.leap.cotracker_kernel_v2 import CoTrackerKernelV2
+from models.leap.leap_kernel import LeapKernel
 
 
 # dpvo
-from leapvo.backend import altcorr, lietorch
-from leapvo.backend.lietorch import SE3
-from leapvo.stream import sintel_depth_stream, dataset_depth_stream
-from leapvo.backend import projective_ops as pops
-from leapvo.backend.ba import BA
+from models.backend import altcorr, lietorch
+from models.backend.lietorch import SE3
+from models.stream import sintel_stream, dataset_stream
+from models.backend import projective_ops as pops
+from models.backend.ba import BA
 
-from leapvo.plot_utils import plot_trajectory, save_trajectory_tum_format, save_pips_plot, eval_metrics, load_gt_traj, load_traj, load_timestamps
+from models.plot_utils import plot_trajectory, save_trajectory_tum_format, save_pips_plot, eval_metrics, load_gt_traj, load_traj, load_timestamps
 
-from leapvo.slam_visualizer import CoTrackerSLAMVisualizer
-from leapvo.timer import Timer
-from leapvo.rerun_visualizer import vis_rerun
+from models.slam_visualizer import CoTrackerSLAMVisualizer
+from models.timer import Timer
+from models.rerun_visualizer import vis_rerun
 import pdb
 import time
 
@@ -79,44 +79,9 @@ def ransac_mask(kpts0, kpts1, K0, K1, ransac, thresh=1.0, conf=0.99999):
         )
     return mask.ravel() > 0
     
-def sample_feat(feat_map, coords):
-    """
-    Samples features from the feature map at specified coordinates.
 
-    Args:
-        feat_map (torch.Tensor): The feature map with shape (B, C, H, W).
-        coords (torch.Tensor): The coordinates to sample at with shape (B, N, 2). 
-                               Coordinates should be normalized [-1, 1].
-
-    Returns:
-        torch.Tensor: Sampled features with shape (B, N, C).
-    """
-    # print("feat_map", feat_map_np.shape, "coords", coords_np.shape)
-    B, C, H, W = feat_map.shape
-    B, N, _ = coords.shape
-
-    coords_tmp = torch.empty_like(coords)
-    coords_tmp[...,0] =  coords_tmp[...,0] / (W-1) * 2 - 1.0
-    coords_tmp[...,1] =  coords_tmp[...,1] / (H-1) * 2 - 1.0
-    grid = coords_tmp.unsqueeze(1)  # Now the size is (B, 1, N, 2), pretending that N is our 'H' and we have 'W'=1
-
-    # Use grid_sample for sampling; grid_sample expects grid in the range of [-1, 1]
-    # Note: 'align_corners=True' aligns the corners of the input and output pixels, 
-    # you can set it to False to not align or check PyTorch documentation for more detail
-    sampled_feats = F.grid_sample(feat_map, grid, mode='bilinear', padding_mode='border', align_corners=True)
-
-    # Reshape sampled features back into the expected output shape (B, N, C)
-    # Here, we collapse the single 'W' dimension and move the 'C' to the last dimension
-    sampled_feats = sampled_feats.squeeze(2)  # Remove W dimension, resulting shape (B, C, N)
-    sampled_feats = sampled_feats.permute(0, 2, 1)  # Change from (B, C, N) to (B, N, C)
-
-    return sampled_feats
-    # return sampled_feats
-
-
-class COTRACKERSLAM_DEPTH:
+class LEAPVO:
     def __init__(self, cfg, ht=480, wd=640):
-        # super(COTRACKERSLAM, self).__init__(cfg=cfg, ht=ht, wd=wd)
 
         self.cfg = cfg
         self.load_weights() 
@@ -421,7 +386,7 @@ class COTRACKERSLAM_DEPTH:
 
     def load_weights(self):
         if self.cfg.model.mode == 'cotracker_kernel_v2':
-            self.network = CoTrackerKernelV2(cfg=self.cfg, stride=self.cfg.model.stride).cuda()
+            self.network = LeapKernel(cfg=self.cfg, stride=self.cfg.model.stride).cuda()
             self.load()
             self.network.eval()
         else:
@@ -1077,7 +1042,7 @@ class COTRACKERSLAM_DEPTH:
     def eval_pose():
         pass
     
-    def __call__(self, tstamp, image, intrinsics, depth_init, depth_g=None, cam_g=None):
+    def __call__(self, tstamp, image, intrinsics, depth_g=None, cam_g=None):
         """main function of tracking
 
         Args:
@@ -1109,19 +1074,15 @@ class COTRACKERSLAM_DEPTH:
         patches, clr = self.generate_patches(image)
         
         # depth initialization
-        # patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
-        disp_init = 1.0 / depth_init
-        patch_disp_init = sample_feat(disp_init[None], patches[:,:,:2,0,0].detach())
-        patches[:,:,2] = patch_disp_init[..., None]
+        patches[:,:,2] = torch.rand_like(patches[:,:,2,0,0,None,None])
         if self.is_initialized:
             s = torch.median(self.patches_[self.n-3:self.n,:,2])
-            patches[:,:,2] = patch_disp_init[..., None] / torch.median(patch_disp_init) * s
+            patches[:,:,2] = s
         
         self.patches_[self.n] = patches   
 
         if self.n % self.kf_stride == 0 and not self.is_initialized:  
             self.patches_valid_[self.n] = 1
-        # self.patches_valid_[self.n] = 1
 
         # color info for visualization
         # clr = (clr[0,:,[2,1,0]] + 0.5) * (255.0 / 2)
@@ -1191,22 +1152,6 @@ class COTRACKERSLAM_DEPTH:
             line += f" {name}: {metric_list[-1]}"
         print(line)
 
-        # print("invalid", self.invalid_frames)
-    
-    # def save_results(self):
-    #     """Save the camera pose and 3D point at the moment
-    #     """
-    #     Gs = SE3(self.poses_).detach()
-    #     pose = Gs.matrix()[:self.n].float().detach().cpu().numpy()
-    #     pts = self.points_[:self.n * self.M].float().detach().cpu().numpy()
-    #     clr = self.colors_[:self.n].reshape(-1,3).float().detach().cpu().numpy()
-        
-    #     pts_valid = self.patches_valid_[:self.n].reshape(-1).detach().cpu().numpy()
-
-    #     save_results_path = os.path.join(self.save_dir,'saved_results')
-    #     Path(save_results_path).mkdir(exist_ok=True)
-    #     save_name = os.path.join(save_results_path, f'{self.n}.npz')
-    #     np.savez(save_name, pose=pose, pts=pts, clr=clr, pts_valid=pts_valid)
 
     def get_results(self):
         self.traj = {}
@@ -1282,10 +1227,9 @@ def main(cfg: DictConfig):
 
 
     imagedir, calib, stride, skip = cfg.data.imagedir, cfg.data.calib, cfg.data.stride, cfg.data.skip 
-    depthdir = cfg.data.depthdir
     print("Running with config...")
     print(cfg)
-    print(imagedir, depthdir, cfg.data.name)
+    print(imagedir, cfg.data.name)
 
     # if os.path.isdir(cfg.data.imagedir):
     #     reader = Process(target=image_stream, args=(queue, imagedir, calib, stride, skip))
@@ -1299,15 +1243,14 @@ def main(cfg: DictConfig):
     #     dataloader = video_stream(None, imagedir, calib, stride, skip)
     # dataloader = replica_stream(imagedir, calib, stride, skip)
     if cfg.data.traj_format == 'sintel':
-        dataloader = sintel_depth_stream(None, imagedir, depthdir, calib, stride, skip)
+        dataloader = sintel_stream(None, imagedir, calib, stride, skip)
     else:
-        dataloader = dataset_depth_stream(None, imagedir, depthdir, calib, stride, skip, mode=cfg.data.traj_format)
+        dataloader = dataset_stream(None, imagedir, calib, stride, skip, mode=cfg.data.traj_format)
     # gt_traj = load_gt_traj(cfg.data.gt_traj, skip=cfg.data.skip, stride=cfg.data.stride, traj_format=cfg.data.traj_format)
     
     image_list = []
     intrinsics_list = []
-    depth_list = []
-    for i, (t, image, intrinsics, depth) in enumerate(dataloader):
+    for i, (t, image, intrinsics) in enumerate(dataloader):
 
         if "max_length" in cfg.data and i >= cfg.data.max_length: break
         if t < 0: break
@@ -1316,19 +1259,18 @@ def main(cfg: DictConfig):
         
         image_list.append(image)
         intrinsics_list.append(intrinsics)
-        depth_list.append(depth)
         image = torch.from_numpy(image).permute(2,0,1).cuda()
         intrinsics = torch.from_numpy(intrinsics).cuda()
-        depth = torch.from_numpy(depth).permute(2,0,1).cuda()
+        
         
         # initialization
         if slam is None:
-            slam = COTRACKERSLAM_DEPTH(cfg, ht=image.shape[1], wd=image.shape[2])
+            slam = LEAPVO(cfg, ht=image.shape[1], wd=image.shape[2])
         # pdb.set_trace()
         # tracking
 
         with Timer("SLAM", enabled=True):
-            slam(t, image, intrinsics, depth_init=depth, depth_g=None, cam_g=None)
+            slam(t, image, intrinsics, depth_g=None, cam_g=None)
 
     # tuple (N, 7), (N, s)
     pred_traj = slam.terminate()
@@ -1376,7 +1318,7 @@ def main(cfg: DictConfig):
 
 
     # visualization
-    if False:
+    if True:
         vis_rerun(slam, image_list, intrinsics_list)
 
 

@@ -16,13 +16,12 @@ from leap.core.cotracker.blocks import (
 )
 
 from leap.core.model_utils import meshgrid2d, bilinear_sample2d, smart_cat
+from leap.core.anchor_sampler import get_anchors
 from leap.core.embeddings import (
     get_2d_embedding,
     get_1d_sincos_pos_embed_from_grid,
     get_2d_sincos_pos_embed,
 )
-
-import pdb
 
 
 torch.manual_seed(0)
@@ -100,8 +99,6 @@ class KernelBlock(nn.Module):
         self.composition = cfg.kernel_block.composition
         assert self.composition in ['sum', 'product']
 
-        print("kernel_list", self.kernel_list)
-        print("composition", self.composition)
         kernel_nets = []
         for kernel in self.kernel_list:
             if kernel == 'linear':
@@ -129,13 +126,13 @@ class KernelBlock(nn.Module):
         return K
 
 
-class CoTrackerKernelV2(nn.Module):
+class LeapKernel(nn.Module):
     def __init__(
         self,
         cfg,
         stride=4,
     ):
-        super(CoTrackerKernelV2, self).__init__()
+        super(LeapKernel, self).__init__()
         self.cfg = cfg.model
         self.S = self.cfg.sliding_window_len
         self.stride = stride
@@ -360,7 +357,6 @@ class CoTrackerKernelV2(nn.Module):
 
         traj_e = torch.zeros((B, T, N, 2), device=device)
         vis_e = torch.zeros((B, T, N), device=device)
-        # var_e = torch.zeros((B, T, N), device=device)
         cov_x_e = torch.zeros((B, T, N), device=device)
         cov_y_e = torch.zeros((B, T, N), device=device)
         dynamic_e = torch.zeros((B, T, N), device=device)
@@ -369,7 +365,6 @@ class CoTrackerKernelV2(nn.Module):
         ind_array = ind_array[None, :, None].repeat(B, 1, N)
 
         track_mask = (ind_array >= first_positive_inds[:, None, :]).unsqueeze(-1)
-        # these are logits, so we initialize visibility with something that would give a value close to 1 after softmax
         vis_init = torch.ones((B, self.S, N, 1), device=device).float() * 10
 
         ind = 0

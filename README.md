@@ -23,16 +23,29 @@ cd f3loc
 conda env create -f environment.yml
 conda activate f3loc
 ```
+
 ## Models and Data 
 
 ### MPI-Sintel
-Follow mpi-sintel and download the Sintel dataset to the data folder. 
+Follow [mpi-sintel](http://sintel.is.tue.mpg.de/) and download it to the data folder. You also need to download the [groundtruth camera pose data](http://sintel.is.tue.mpg.de/depth) for evaluation. 
+
 
 ### AirDOS-Shibuya
-Follow tartanair-shibuya and download it to the data folder.
+Follow [tartanair-shibuya](https://github.com/haleqiu/tartanair-shibuya) and download it to the data folder.
 
 
 ## Evaluation
+
+### MPI-Sintel
+```
+bash scripts/eval/run_cotrackerslam_sintel_cvpr_fixed_intrinsics.sh
+```
+
+### AirDOS-Shibuya
+```
+bash scripts/eval/run_cotrackerslam_tartanair_shibuya_cvpr.sh
+```
+
 
 ## Citation
 If you use this project or ideas from the paper for your research, please cite our paper:

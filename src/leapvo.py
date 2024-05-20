@@ -1,40 +1,25 @@
-# import sys
-# sys.path.append('/local/home/weirchen/Research/projects/pips')
-
 import os
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
-import matplotlib
-matplotlib.use('Agg')
 
-from pathlib import Path
-import math
+from src.leap.leap_kernel import LeapKernel
+from src.backend import altcorr, lietorch
+from src.backend.lietorch import SE3
+from src.backend import projective_ops as pops
+from src.backend.ba import BA
+from src.plot_utils import save_pips_plot
+from src.slam_visualizer import CoTrackerSLAMVisualizer
+from src.timer import Timer
+
 import cv2
 import torch
 import torch.nn.functional as F
 import numpy as np
+from pathlib import Path
 from einops import rearrange, repeat
-from omegaconf import DictConfig
-import hydra
-
-
-from leapvo.leap.cotracker_kernel_v2 import CoTrackerKernelV2
-
-
-# dpvo
-from leapvo.backend import altcorr, lietorch
-from leapvo.backend.lietorch import SE3
-from leapvo.stream import sintel_stream, dataset_stream
-from leapvo.backend import projective_ops as pops
-from leapvo.backend.ba import BA
-
-from leapvo.plot_utils import plot_trajectory, save_trajectory_tum_format, save_pips_plot, eval_metrics, load_gt_traj, load_traj, load_timestamps
-
-from leapvo.slam_visualizer import CoTrackerSLAMVisualizer
-from leapvo.timer import Timer
-from leapvo.rerun_visualizer import vis_rerun
+import matplotlib
+matplotlib.use('Agg')
 import pdb
-import time
 
 def flatmeshgrid(*args, **kwargs):
     grid = torch.meshgrid(*args, **kwargs)
@@ -80,9 +65,8 @@ def ransac_mask(kpts0, kpts1, K0, K1, ransac, thresh=1.0, conf=0.99999):
     return mask.ravel() > 0
     
 
-class COTRACKERSLAM:
+class LEAPVO:
     def __init__(self, cfg, ht=480, wd=640):
-        # super(COTRACKERSLAM, self).__init__(cfg=cfg, ht=ht, wd=wd)
 
         self.cfg = cfg
         self.load_weights() 
@@ -387,7 +371,7 @@ class COTRACKERSLAM:
 
     def load_weights(self):
         if self.cfg.model.mode == 'cotracker_kernel_v2':
-            self.network = CoTrackerKernelV2(cfg=self.cfg, stride=self.cfg.model.stride).cuda()
+            self.network = LeapKernel(cfg=self.cfg, stride=self.cfg.model.stride).cuda()
             self.load()
             self.network.eval()
         else:
@@ -1231,113 +1215,4 @@ def get_replica_intrinsics():
     return fx, fy, cx, cy 
 
 
-@hydra.main(version_base=None, config_path="configs", config_name="pipsmultislam")
-def main(cfg: DictConfig):
 
-    gt_traj = load_traj(cfg.data.gt_traj, cfg.data.traj_format, skip=cfg.data.skip, stride=cfg.data.stride)
-
-    slam = None
-    timeit = False
-    skip = 0
-    
-    # queue = Queue(maxsize=1)
-
-
-    imagedir, calib, stride, skip = cfg.data.imagedir, cfg.data.calib, cfg.data.stride, cfg.data.skip 
-    print("Running with config...")
-    print(cfg)
-    print(imagedir, cfg.data.name)
-
-    # if os.path.isdir(cfg.data.imagedir):
-    #     reader = Process(target=image_stream, args=(queue, imagedir, calib, stride, skip))
-    # else:
-    #     reader = Process(target=video_stream, args=(queue, imagedir, calib, stride, skip))
-
-    # reader.start()
-    # if os.path.isdir(cfg.data.imagedir):
-    #     dataloader = image_stream(None, imagedir, calib, stride, skip)
-    # else:
-    #     dataloader = video_stream(None, imagedir, calib, stride, skip)
-    # dataloader = replica_stream(imagedir, calib, stride, skip)
-    if cfg.data.traj_format == 'sintel':
-        dataloader = sintel_stream(None, imagedir, calib, stride, skip)
-    else:
-        dataloader = dataset_stream(None, imagedir, calib, stride, skip, mode=cfg.data.traj_format)
-    # gt_traj = load_gt_traj(cfg.data.gt_traj, skip=cfg.data.skip, stride=cfg.data.stride, traj_format=cfg.data.traj_format)
-    
-    image_list = []
-    intrinsics_list = []
-    for i, (t, image, intrinsics) in enumerate(dataloader):
-
-        if "max_length" in cfg.data and i >= cfg.data.max_length: break
-        if t < 0: break
-        
-        print(i, image.shape, intrinsics.shape)
-        
-        image_list.append(image)
-        intrinsics_list.append(intrinsics)
-        image = torch.from_numpy(image).permute(2,0,1).cuda()
-        intrinsics = torch.from_numpy(intrinsics).cuda()
-        
-        
-        # initialization
-        if slam is None:
-            slam = COTRACKERSLAM(cfg, ht=image.shape[1], wd=image.shape[2])
-        # pdb.set_trace()
-        # tracking
-
-        with Timer("SLAM", enabled=True):
-            slam(t, image, intrinsics, depth_g=None, cam_g=None)
-
-    # tuple (N, 7), (N, s)
-    pred_traj = slam.terminate()
-
-    if cfg.data.traj_format == 'tum':
-        traj_t_map_file = cfg.data.gt_traj.replace('groundtruth.txt', 'rgb.txt')
-        pred_traj = list(pred_traj)
-        pred_traj[1] = load_timestamps(traj_t_map_file, cfg.data.traj_format)
-        pred_traj[1] = pred_traj[1][:pred_traj[0].shape[0]]
-    elif cfg.data.traj_format == 'tartan_shibuya':
-        traj_t_map_file = cfg.data.gt_traj.replace('gt_pose.txt', 'times.txt')
-        pred_traj = list(pred_traj)
-        pred_traj[1] = load_timestamps(traj_t_map_file, cfg.data.traj_format)
-        pred_traj[1] = pred_traj[1][:pred_traj[0].shape[0]]
-    # elif args.traj_format == 'sintel':
-    
-
-    os.makedirs(f"{cfg.data.savedir}/{cfg.data.name}", exist_ok=True)
-
-    if cfg.save_results:
-        save_results_path  = f"{cfg.data.savedir}/{cfg.data.name}/saved_results.npz"
-        slam.save_results(save_results_path, imagedir=cfg.data.imagedir)
-
-    if cfg.save_trajectory:
-        # Path(os.path.join(slam.save_dir, "saved_trajectories")).mkdir(exist_ok=True)
-        # save_trajectory_tum_format(pred_traj, f"saved_trajectories/{cfg.exp_name}.txt")
-        # save_trajectory_tum_format(pred_traj, os.path.join(slam.save_dir,'traj.txt'))
-        save_trajectory_tum_format(pred_traj, f"{cfg.data.savedir}/{cfg.data.name}/pipsmultislam_traj.txt")
-
-    if cfg.plot:
-        # Path("trajectory_plots").mkdir(exist_ok=True)
-        # plot_trajectory(pred_traj, gt_traj=gt_traj, title=f"PIP_SLAM Trajectory Prediction for {cfg.exp_name}", filename=os.path.join(slam.save_dir,'traj_plot.pdf'))
-        plot_trajectory(pred_traj, gt_traj=gt_traj, title=f"DPVO Trajectory Prediction for {cfg.exp_name}", filename=f"{cfg.data.savedir}/{cfg.data.name}/traj_plot.pdf")
-    
-    if cfg.save_video:
-        slam.visualizer.save_video(filename=cfg.slam.PATCH_GEN)
-
-    # eval_metrics(pred_traj, gt_traj=gt_traj, seq=cfg.exp_name, filename=os.path.join(slam.save_dir,'eval_metrics.txt'))
-    ate, rpe_trans, rpe_rot = eval_metrics(pred_traj, gt_traj=gt_traj, seq=cfg.exp_name, filename=os.path.join(cfg.data.savedir,cfg.data.name, 'eval_metrics.txt'))
-    with open(os.path.join(cfg.data.savedir, 'error_sum.txt'), 'a+') as f:
-        line = f"{cfg.data.name:<20} | ATE: {ate:.5f}, RPE trans: {rpe_trans:.5f}, RPE rot: {rpe_rot:.5f}\n"
-        f.write(line)
-        line = f"{ate:.5f}\n{rpe_trans:.5f}\n{rpe_rot:.5f}\n"
-        f.write(line)
-
-
-    # visualization
-    if True:
-        vis_rerun(slam, image_list, intrinsics_list)
-
-
-if __name__ == '__main__':
-    main()
