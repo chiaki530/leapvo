@@ -4,7 +4,7 @@ import math
 from src.leapvo import LEAPVO
 from src.stream import sintel_stream, dataset_stream
 from src.rerun_visualizer import vis_rerun
-from src.plot_utils import plot_trajectory, save_trajectory_tum_format, save_pips_plot, eval_metrics, load_gt_traj, load_traj, load_timestamps
+from src.plot_utils import plot_trajectory, save_trajectory_tum_format, eval_metrics, load_traj, load_timestamps
 
 import torch
 import hydra
@@ -12,7 +12,7 @@ from omegaconf import DictConfig
 
 import pdb
 
-@hydra.main(version_base=None, config_path="configs", config_name="pipsmultislam")
+@hydra.main(version_base=None, config_path="configs", config_name="leapvo_sintel")
 def main(cfg: DictConfig):
 
     gt_traj = load_traj(cfg.data.gt_traj, cfg.data.traj_format, skip=cfg.data.skip, stride=cfg.data.stride)
@@ -66,15 +66,14 @@ def main(cfg: DictConfig):
         slam.save_results(save_results_path, imagedir=cfg.data.imagedir)
 
     if cfg.save_trajectory:
-        save_trajectory_tum_format(pred_traj, f"{cfg.data.savedir}/{cfg.data.name}/pipsmultislam_traj.txt")
+        save_trajectory_tum_format(pred_traj, f"{cfg.data.savedir}/{cfg.data.name}/leapvo_traj.txt")
 
     if cfg.plot:
-        plot_trajectory(pred_traj, gt_traj=gt_traj, title=f"DPVO Trajectory Prediction for {cfg.exp_name}", filename=f"{cfg.data.savedir}/{cfg.data.name}/traj_plot.pdf")
+        plot_trajectory(pred_traj, gt_traj=gt_traj, title=f"LEAPVO Trajectory Prediction for {cfg.exp_name}", filename=f"{cfg.data.savedir}/{cfg.data.name}/traj_plot.pdf")
     
     if cfg.save_video:
         slam.visualizer.save_video(filename=cfg.slam.PATCH_GEN)
 
-    # eval_metrics(pred_traj, gt_traj=gt_traj, seq=cfg.exp_name, filename=os.path.join(slam.save_dir,'eval_metrics.txt'))
     ate, rpe_trans, rpe_rot = eval_metrics(pred_traj, gt_traj=gt_traj, seq=cfg.exp_name, filename=os.path.join(cfg.data.savedir,cfg.data.name, 'eval_metrics.txt'))
     with open(os.path.join(cfg.data.savedir, 'error_sum.txt'), 'a+') as f:
         line = f"{cfg.data.name:<20} | ATE: {ate:.5f}, RPE trans: {rpe_trans:.5f}, RPE rot: {rpe_rot:.5f}\n"
@@ -84,7 +83,7 @@ def main(cfg: DictConfig):
 
 
     # visualization
-    if True:
+    if cfg.viz:
         vis_rerun(slam, image_list, intrinsics_list)
 
 

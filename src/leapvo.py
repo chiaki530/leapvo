@@ -1,7 +1,6 @@
 import os
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
-
 from src.leap.leap_kernel import LeapKernel
 from src.backend import altcorr, lietorch
 from src.backend.lietorch import SE3
@@ -72,7 +71,7 @@ class LEAPVO:
         self.load_weights() 
         self.ht = ht
         self.wd = wd
-        self.P = 1      # point: patch_size = 1
+        self.P = 1      # point tracking: patch_size = 1
         self.S = cfg.model.S
         self.is_initialized = False
         self.enable_timing = False
@@ -113,10 +112,6 @@ class LEAPVO:
         self.poses_[:,6] = 1.0
         
         self.local_window = []
-
-        # for generating ground truth trajectory
-        self.local_window_depth_g = []
-        self.local_window_cam_g = []
         
         # store relative poses for removed frames
         self.delta = {}
@@ -133,15 +128,10 @@ class LEAPVO:
             'ate_masked': []
         }
          
-        
+
         # cache 
         self.cache_window = []
-        # self.cache = {
-
-        # }
-        
         self.invalid_frames = []
-
         
         self.S_model = cfg.model.S
         self.S_slam = cfg.slam.S_slam       # tracked window
@@ -156,7 +146,6 @@ class LEAPVO:
         self.use_forward = cfg.slam.use_forward if 'use_forward' in cfg.slam else True
         self.use_backward = cfg.slam.use_backward if 'use_backward' in cfg.slam else True
         
-        print("[use_forward]", self.use_forward,'[use_backward]', self.use_backward)
         self.visualizer = CoTrackerSLAMVisualizer(cfg, save_dir=save_dir)
     
     @property
@@ -198,15 +187,7 @@ class LEAPVO:
         # project patch k from i to j
         self.jj = torch.cat([self.jj, jj])
         self.kk = torch.cat([self.kk, ii])
-        # self.ix = self.index_
         self.ii = torch.cat([self.ii, self.ix[ii]])
-    
-
-        # print("append_factors")
-        # print("jj", jj, jj.shape)
-        # print("kk", ii, ii.shape)
-        # print("ii", self.ix[ii], self.ix[ii].shape)
-        # print("self.n", self.n, "self.ii", self.ii.shape)
 
     def remove_factors(self, m):
         self.ii = self.ii[~m]
@@ -242,6 +223,7 @@ class LEAPVO:
             grid_y = 8 + grid_y.reshape(B, -1)/float(M_-1) * (self.ht-16)
             grid_x = 8 + grid_x.reshape(B, -1)/float(M_-1) * (self.wd-16)
             coords = torch.stack([grid_x, grid_y], dim=-1) # B, N_*N_, 2
+            
         elif self.cfg.slam.PATCH_GEN == 'random':
             x = torch.randint(1, self.wd-1, size=[1, self.M], device="cuda")
             y = torch.randint(1, self.ht-1, size=[1, self.M], device="cuda")
@@ -279,22 +261,6 @@ class LEAPVO:
 
             coords = xys[None,...].float()    # self.M, 2
 
-        # TODO: img_grad
-        elif self.cfg.slam.PATCH_GEN == 'img_grad':
-            margin = 64
-
-            g = self.__image_gradient(self.local_window[-1][None, None, ...])
-            x = torch.randint(margin, self.wd-margin, size=[1, 3*self.M], device="cuda")
-            y = torch.randint(margin, self.ht-margin, size=[1, 3*self.M], device="cuda")
-
-            coords = torch.stack([x, y], dim=-1).float()    ## [1, N, 2]
-            g = altcorr.patchify(g[0,:,None], coords, 0).view(1, 3 * self.M)
-            
-            ix = torch.argsort(g, dim=1)
-            x = torch.gather(x, 1, ix[:, -self.M:])
-            y = torch.gather(y, 1, ix[:, -self.M:])
-            coords = torch.stack([x, y], dim=-1).float()
-            # pdb.set_trace()    
             
         elif 'grid_grad' in self.cfg.slam.PATCH_GEN:
             rel_margin = 0.15
@@ -370,7 +336,7 @@ class LEAPVO:
 
 
     def load_weights(self):
-        if self.cfg.model.mode == 'cotracker_kernel_v2':
+        if self.cfg.model.mode == 'leap_kernel':
             self.network = LeapKernel(cfg=self.cfg, stride=self.cfg.model.stride).cuda()
             self.load()
             self.network.eval()
@@ -505,13 +471,9 @@ class LEAPVO:
         xys_sid = repeat(torch.arange(S).to(xys.device), 's -> b s m', b=B, m=self.M)
         xys = rearrange(xys, 'b s m c -> b (s m) c')
         xys_sid = rearrange(xys_sid, 'b s m -> b (s m)')
-        
-        # coords = self.reproject()[...,self.P//2, self.P//2]
-        # pdb.set_trace()
       
         coords_init = None
         if S > 1 and self.is_initialized :
-            # default: copy xys
             N = xys.shape[1]
 
             if self.cfg.slam.TRAJ_INIT == 'copy':
@@ -577,29 +539,12 @@ class LEAPVO:
         queries[:, :, 1] *= self.interp_shape[1] / W
         queries[:, :, 2] *= self.interp_shape[0] / H
 
-        # xys_sid = queries[...,0]
-        # xys = queries[...,1:]
-        # tracks, visibilities, stats = self.network(rgbs=video, xys=xys, xys_sid=xys_sid, iters=self.cfg.model.I)
         stats = {}
-        # start_time = time.time()
-        with Timer("LEAP front-end", enabled=True):
-            if self.cfg.model.mode in ['cotracker_new', 'cotracker_pips', 'cotracker_long']:
-                tracks, _, visibilities, dynamic_e, _ = self.network(rgbs=video, queries=queries, iters=self.cfg.model.I)
-                stats['dynamic_e'] = dynamic_e
-            elif self.cfg.model.mode == 'cotracker_iid':
-                tracks, _, visibilities, var_e, dynamic_e, _ = self.network(rgbs=video, queries=queries, iters=self.cfg.model.I)
-                stats['var_e'] = var_e
-                stats['dynamic_e'] = dynamic_e
-            elif self.cfg.model.mode == 'cotracker_kernel_v2':
-                tracks, _, visibilities, cov_list_e, dynamic_e, _ = self.network(rgbs=video, queries=queries, iters=self.cfg.model.I)
-                stats['var_e'] = cov_list_e[0] + cov_list_e[1]  # var_x + var_y
-                stats['dynamic_e'] = dynamic_e
+        tracks, _, visibilities, cov_list_e, dynamic_e, _ = self.network(rgbs=video, queries=queries, iters=self.cfg.model.I)
+        stats['var_e'] = cov_list_e[0] + cov_list_e[1]  # var_x + var_y
+        stats['dynamic_e'] = dynamic_e
         
-        # end_time = time.time()
-        # elapsed_time = end_time - start_time
-        # print(f"leap front-end {elapsed_time} s")
-            
-        # TODO: open backward_tracking
+        # backward_tracking
         if self.cfg.slam.backward_tracking:
             tracks, visibilities, stats = self._compute_backward_tracks(
                 video, queries, tracks, visibilities, stats
@@ -627,22 +572,11 @@ class LEAPVO:
         inv_queries = queries.clone()
         inv_queries[:, :, 0] = inv_video.shape[1] - inv_queries[:, :, 0] - 1
 
-        # inv_tracks, inv_visibilities, inv_stats = self.model(
-        #     rgbs=inv_video, xys=inv_queries[...,1:], xys_sid=inv_queries[...,0], iters=self.cfg.model.I
-        # )
         inv_stats = {}
 
-        if self.cfg.model.mode in ['cotracker_new', 'cotracker_pips', 'cotracker_long']:
-            inv_traj_e, _, inv_vis_e, inv_dynamic_e, _ = self.network(rgbs=inv_video, queries=inv_queries, iters=self.cfg.model.I)
-            inv_stats['dynamic_e'] = inv_dynamic_e
-        elif self.cfg.model.mode == 'cotracker_iid':
-            inv_traj_e, _, inv_vis_e, inv_var_e, inv_dynamic_e, _ = self.network(rgbs=inv_video, queries=inv_queries, iters=self.cfg.model.I)
-            inv_stats['var_e'] = inv_var_e
-            inv_stats['dynamic_e'] = inv_dynamic_e
-        elif self.cfg.model.mode == 'cotracker_kernel_v2':
-            inv_traj_e, _, inv_vis_e, inv_cov_list_e, inv_dynamic_e, _ = self.network(rgbs=inv_video, queries=inv_queries, iters=self.cfg.model.I)
-            inv_stats['var_e'] = inv_cov_list_e[0] + inv_cov_list_e[1]  # var_x + var_y
-            inv_stats['dynamic_e'] = inv_dynamic_e
+        inv_traj_e, _, inv_vis_e, inv_cov_list_e, inv_dynamic_e, _ = self.network(rgbs=inv_video, queries=inv_queries, iters=self.cfg.model.I)
+        inv_stats['var_e'] = inv_cov_list_e[0] + inv_cov_list_e[1]  # var_x + var_y
+        inv_stats['dynamic_e'] = inv_dynamic_e
 
         inv_tracks = inv_traj_e.flip(1)
         inv_visibilities = inv_vis_e.flip(1)
@@ -663,9 +597,6 @@ class LEAPVO:
 
         queries = self.get_queries()
         
-        # if only_coords:
-        #     return xys, xys_sid
-        
         # pad repeated frames to make local window = S
         if rgbs.shape[1] < self.S_slam:
             repeat_rgbs = repeat(rgbs[:,-1], 'b c h w -> b s c h w', s=self.S-S_local)
@@ -675,54 +606,30 @@ class LEAPVO:
         coords_vars = None
         conf_label = None
 
-        if self.cfg.model.mode in ['cotracker_new', 'cotracker_iid', 'cotracker_kernel_v2', 'cotracker_pips', 'cotracker_long']:
-            
-          
-            traj_e, vis_e, stats = self._compute_sparse_tracks(video=rgbs, queries=queries)
-            local_target = traj_e
-            if 'VIS_THRESHOLD' in self.cfg.slam:
-                vis_label = (vis_e > self.cfg.slam.VIS_THRESHOLD)   # B, S, N
+        traj_e, vis_e, stats = self._compute_sparse_tracks(video=rgbs, queries=queries)
+        local_target = traj_e
+        if 'VIS_THRESHOLD' in self.cfg.slam:
+            vis_label = (vis_e > self.cfg.slam.VIS_THRESHOLD)   # B, S, N
+        else:
+            vis_label = (torch.ones_like(vis_e) > 0)
+
+        if 'dynamic_e' in stats and 'STATIC_THRESHOLD' in self.cfg.slam:
+            if self.cfg.model.mode == 'cotracker_long':
+                dynamic_e = torch.mean(stats['dynamic_e'], dim=1).unsqueeze(1).repeat(1, vis_label.shape[1], 1)
+                statie_e  = 1 - dynamic_e
             else:
-               vis_label = (torch.ones_like(vis_e) > 0)
+                statie_e = 1 - stats['dynamic_e']
+            static_th = torch.quantile(statie_e,  (1 - self.cfg.slam.STATIC_QUANTILE))
+            static_th = min(static_th.item(), self.cfg.slam.STATIC_THRESHOLD)
+            static_label = statie_e >= static_th
+            vis_label = vis_label & static_label
 
-            if 'dynamic_e' in stats and 'STATIC_THRESHOLD' in self.cfg.slam:
-                # TODO: threshold should be calculated from each frame
-                if self.cfg.model.mode == 'cotracker_long':
-                    dynamic_e = torch.mean(stats['dynamic_e'], dim=1).unsqueeze(1).repeat(1, vis_label.shape[1], 1)
-                    statie_e  = 1 - dynamic_e
-                else:
-                    statie_e = 1 - stats['dynamic_e']
-                static_th = torch.quantile(statie_e,  (1 - self.cfg.slam.STATIC_QUANTILE))
-                static_th = min(static_th.item(), self.cfg.slam.STATIC_THRESHOLD)
-                # static_th = self.cfg.slam.STATIC_THRESHOLD
-                static_label = statie_e >= static_th
-                # static_label = repeat(static_label, 'b n -> b s n', s=vis_label.shape[1])
-                print(f"vis_label@{self.cfg.slam.VIS_THRESHOLD}: {vis_label.float().mean().item():.4f} , static_label@{static_th}: {static_label.float().mean().item():.4f}")
-                vis_label = vis_label & static_label
-
-            if 'var_e' in stats and 'CONF_THRESHOLD' in self.cfg.slam:
-                 # TODO: threshold should be calculated from each frame
-                # coords_vars = stats['var_e']
-                coords_vars = torch.sqrt(stats['var_e'])
-
-                conf_th = torch.quantile(coords_vars,  self.cfg.slam.CONF_QUANTILE, dim=2, keepdim=True)
-                # conf_th = torch.max(conf_th.item(), self.cfg.slam.CONF_THRESHOLD)
-                conf_th[conf_th < self.cfg.slam.CONF_THRESHOLD] = self.cfg.slam.CONF_THRESHOLD
-                # conf_th = self.cfg.slam.CONF_THRESHOLD
-                conf_label = coords_vars < conf_th
-                vis_label = vis_label & conf_label
-                print(f"conf_label@{conf_th.mean()}: {conf_label.float().mean().item():.4f}, valid_label: {vis_label.float().mean().item():.4f}")
-
-        elif self.cfg.model.mode in 'cotracker':
-            xys_sid = queries[...,0]
-            xys = queries[...,1:]
-            local_target, vis_e = self.network(xys, rgbs, xys_sid=xys_sid, iters=self.cfg.model.I, coords_init=None)
-            vis_e = vis_e.float()
-
-            if 'VIS_THRESHOLD' in self.cfg.slam:
-                vis_label = (vis_e > self.cfg.slam.VIS_THRESHOLD)   # B, S, N
-            else:
-                vis_label = (torch.ones_like(vis_e) > 0)
+        if 'var_e' in stats and 'CONF_THRESHOLD' in self.cfg.slam:
+            coords_vars = torch.sqrt(stats['var_e'])
+            conf_th = torch.quantile(coords_vars,  self.cfg.slam.CONF_QUANTILE, dim=2, keepdim=True)
+            conf_th[conf_th < self.cfg.slam.CONF_THRESHOLD] = self.cfg.slam.CONF_THRESHOLD
+            conf_label = coords_vars < conf_th
+            vis_label = vis_label & conf_label
 
         local_target = local_target[:,:S_local]
         vis_label = vis_label[:,:S_local]
@@ -734,7 +641,6 @@ class LEAPVO:
             query_valid = torch.logical_or(query_valid.reshape(-1), valid_from_filter)
             self.patches_valid_[self.n-len(self.local_window):self.n:self.kf_stride] = query_valid.reshape(-1, self.M)
 
-        print("vis_label", vis_label.float().mean())
         stats = {
             'vis_label': None,
             'static_label': None,
@@ -749,20 +655,6 @@ class LEAPVO:
         
         return local_target, vis_label, queries, stats
     
-
-    def add_traj_noise(self, trajs, cfg):
-        mode, std = cfg.split('_')
-        std = float(std)
-        
-        if mode == 'gauss':
-            noise = torch.randn(*trajs.shape).to(trajs.device) * std
-        elif mode == 'uniform':
-            noise = (torch.rand_like(trajs) - 0.5) * 2 * std
-        else:
-            raise NotImplementedError
-        
-        trajs = trajs + noise
-        return trajs
         
     def predict_target(self):
         # predict target        
@@ -779,14 +671,7 @@ class LEAPVO:
         else:
             trajs_gt = None
             valid_gt = None
-             
-        if self.cfg.use_gt_traj:
-            trajs = trajs_gt
-            vis_label = torch.ones(trajs_gt.shape[:3]).bool()
 
-            if 'gt_traj_noise' in self.cfg:
-                trajs = self.add_traj_noise(trajs, self.cfg.gt_traj_noise)
-            
         # save predictions
         self.last_target = trajs
         self.last_valid = vis_label 
@@ -795,9 +680,7 @@ class LEAPVO:
             self.last_target_gt = trajs_gt
             self.last_valid_gt = torch.all(valid_gt > 0, dim=-1)
         
-        # rearrange s.t. it matches the edge order
         B, S, N, C = trajs.shape
-        print("trajs", trajs.shape)
         local_target = rearrange(trajs, 'b s n c -> b (n s) c')
         
         # predict weight 
@@ -810,37 +693,13 @@ class LEAPVO:
         else:
             local_weight = torch.ones_like(local_target)
         
-        # apply traj_pred
         vis_label = rearrange(vis_label, 'b s n -> b (n s)')
         local_weight[~vis_label] = 0
-        
-        # edge_weight_decay: the closer to the reference frame, the larger the weight
-        if 'EDGE_WEIGHT_DECAY' in self.cfg.slam:
-            # local_weight = rearrange(local_weight, 'b (n s) c -> b s n c', s=S, n=N)
-            edge_weight_decay = torch.ones(S).to(local_weight.device)
-            edge_weight_decay[1:] = self.cfg.slam.EDGE_WEIGHT_DECAY
-            edge_weight_decay_cum = torch.cumprod(edge_weight_decay, dim=0)
-            edge_weights = repeat(edge_weight_decay_cum, 's -> b (n s) c', b=B, c=C, n=N)
-            local_weight = local_weight * edge_weights
-
-        # compute ransac masks
-        if self.cfg.slam.USE_RANSAC:
-            ransac_mask = self.compute_ransac_mask(trajs, mode=self.cfg.slam.RANSAC_MODE)
-            ransac_mask = repeat(ransac_mask, 'b s n -> b (n s) c', c=C)
-            local_weight[~ransac_mask] = 0
-            
-        # for target output boundary, set weight to 0
+    
+        # out of boundary
         padding = 20
         boundary_mask = (local_target[...,0] >= padding) & (local_target[...,0] < self.wd - padding) & (local_target[...,1] >= padding) & (local_target[...,1] < self.ht - padding) 
         local_weight[~boundary_mask] = 0 
-        
-        # GT FILTERING: using GT traj to filter pred
-        if self.cfg.load_gt and 'GT_FILTERING' in self.cfg.slam and self.cfg.slam.GT_FILTERING > 0:
-            ate = torch.norm(trajs - trajs_gt, dim=-1) # B, S, N
-            ate_mask = rearrange((ate < self.cfg.slam.GT_FILTERING), 'b s n -> b (n s)')
-            local_weight[~ate_mask] = 0    
-            gt_mask = rearrange(valid_gt, 'b s n c -> b (n s) c')        
-            local_weight[~gt_mask] = 0
         
         # check if some frame has too fewer matches
         if 'MIN_VALID_PATCH' in self.cfg.slam and self.cfg.slam.MIN_VALID_PATCH > 0:
@@ -850,31 +709,19 @@ class LEAPVO:
             frame_mask = repeat(frame_valid, 'b s -> b (n s)', n=N)
             local_weight[~frame_mask] = 0
             
-        # check if the patches as some optimization targets
+        # check track length
         if self.n >= self.cfg.slam.MIN_TRACK_LEN:
             patch_valid = (local_weight > 0).any(dim=-1)
             patch_valid = rearrange(patch_valid, 'b (n s) -> b s n', s=S, n=N)
             patch_valid = (patch_valid.sum(dim=1) >= self.cfg.slam.MIN_TRACK_LEN)
-            # FIXME: check the query frame idx to replace
             self.patches_valid_[self.n-S:self.n:self.kf_stride] = patch_valid.reshape(-1, self.M)
             track_len_mask = repeat(patch_valid, 'b n -> b (n s)', s=S)
             local_weight[~track_len_mask] = 0
-
-        # only keep matches with frame distance < threshold of reference points
-        if 'MAX_FRAME_DIST' in self.cfg.slam and self.cfg.slam.MAX_FRAME_DIST:
-            S = len(self.local_window)
-            xys_sid = repeat(torch.arange(S).to(local_weight.device), 's -> b (s m)', b=B, m=self.M)
-            xys_sid = repeat(xys_sid, 'b n -> b s n', s=S)
-            frame_id = repeat(torch.arange(S).to(local_weight.device), 's -> b s n', b=B, n=N)
-            frame_dist_mask = torch.abs(xys_sid - frame_id) <= self.cfg.slam.MAX_FRAME_DIST
-            frame_dist_mask = rearrange(frame_dist_mask, 'b s n -> b (n s)')
-            local_weight[~frame_dist_mask] = 0
 
         # append to global targets, weights
         self.targets = torch.cat([self.targets, local_target], dim=1)
         self.weights = torch.cat([self.weights, local_weight], dim=1)
 
-        print("local_target", local_target.shape, "targets", self.targets.shape)
         local_target_ = rearrange(local_target, 'b (s1 m s) c -> b s s1 m c', s=S, m=self.M)
         local_weight_ = rearrange(local_weight, 'b (s1 m s) c -> b s s1 m c', s=S, m=self.M)
      
@@ -906,10 +753,6 @@ class LEAPVO:
                     pdb.set_trace()
                 save_pips_path = os.path.join(self.save_dir,'saved_images')
                 Path(save_pips_path).mkdir(exist_ok=True)
-                # valid = valid_gt & valid_pred
-                # masked_ate = torch.linalg.norm(trajs[0][valid[0]] - trajs_gt[0][valid[0]], dim=-1).mean()
-                # print("masked_ate", masked_ate)
-                # if masked_ate > 
                 save_pips_plot(
                     rgbs[0].detach().cpu().numpy(), 
                     trajs[0].detach().cpu().numpy(),
@@ -921,53 +764,6 @@ class LEAPVO:
                     valid_gt=valid_gt[0].detach().cpu().numpy()
                 )
       
-    def compute_ransac_mask(self, trajs, mode='back'):
-        """Compute the ransac mask based on trajectories
-        
-        Args:
-            trajs: B, S, N, C
-        Returns:    
-            masks: B, S, N
-        """
-        # FIXME: Need to change to N vs N
-        
-        B, S, N, C = trajs.shape
-        assert B==1
-        # It is the maximum distance from a point to an epipolar line in pixels
-        thresh = self.cfg.slam.RANSAC_THRESH if 'RANSAC_THRESH' in self.cfg.slam else 1.0
-        
-        trajs_np = trajs.detach().cpu().numpy()
-        intrinsics = self.intrinsics[:,max(0,self.n-self.S):self.n].detach().cpu().numpy()
-        Ks = np.zeros((B, S, 3, 3))
-        Ks[:,:,0,0] = intrinsics[...,0]
-        Ks[:,:,1,1] = intrinsics[...,1]
-        Ks[:,:,0,2] = intrinsics[...,2]
-        Ks[:,:,1,2] = intrinsics[...,3]
-        Ks[:,:,2,2] = 1
-        
-        masks = np.ones((B, S, N)).astype(bool)
-        if mode in ['forw', 'back']:
-            if mode == 'back':
-                ref_idx = S - 1
-            elif mode == 'forw':
-                ref_idx = 0
-            for i in range(S):
-                pts1 = trajs_np[0,i]
-                pts2 = trajs_np[0, ref_idx]
-                mask = ransac_mask(pts1, pts2, Ks[0,i], Ks[0,ref_idx], ransac=True, thresh=thresh)
-                masks[0,i] = mask.reshape(-1)
-        elif mode == 'neighbor':
-            for i in range(S-1):
-                pts1 = trajs_np[0,i]
-                pts2 = trajs_np[0, i+1]
-                mask = ransac_mask(pts1, pts2, Ks[0,i], Ks[0,i+1], ransac=True, thresh=thresh)
-                masks[0,i] = masks[0,i] & mask
-                masks[0,i+1] = masks[0,i+1] & mask
-
-
-        masks = torch.from_numpy(masks).to(trajs.device).bool()
-        return masks
-    
     def update(self):
         # lmbda
         lmbda = torch.as_tensor([1e-4], device="cuda")
