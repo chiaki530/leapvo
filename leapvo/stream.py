@@ -5,6 +5,8 @@ from multiprocessing import Process, Queue
 from pathlib import Path
 from itertools import chain
 
+import pdb
+
 RUN_REPLICA = True
 TAG_FLOAT = 202021.25
 TAG_CHAR = 'PIEH'
@@ -79,6 +81,106 @@ def sintel_stream(queue, imagedir, calib_root, stride, skip=0):
     # queue.put((-1, image, intrinsics))
     yield (-1, image, intrinsics) 
 
+
+
+def sintel_depth_stream(queue, imagedir, depthdir, calib_root, stride, skip=0):
+    """ image generator """
+
+    # calib = np.loadtxt(calib, delimiter=" ")
+    # fx, fy, cx, cy = calib[:4]
+
+    # K = np.eye(3)
+    # K[0,0] = fx
+    # K[0,2] = cx
+    # K[1,1] = fy
+    # K[1,2] = cy
+    # K, _ = cam_read(calib_path)
+
+    img_exts = ["*.png", "*.jpeg", "*.jpg"]
+    image_list = sorted(chain.from_iterable(Path(imagedir).glob(e) for e in img_exts))[skip::stride]
+
+
+    depth_exts = ["*.npy"]
+    depth_list = sorted(chain.from_iterable(Path(depthdir).glob(e) for e in depth_exts))[skip::stride]
+    for t, imfile in enumerate(image_list):
+        image = cv2.imread(str(imfile))
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+        depth = np.load(depth_list[t])
+
+        camfile = str(imfile).split('/')[-1].replace('.png','.cam')
+        K, _ = cam_read(os.path.join(calib_root, camfile))
+        fx, fy, cx, cy = K[0,0], K[1,1], K[0,2], K[1,2]
+        calib = [fx, fy, cx, cy]
+        if len(calib) > 4:
+            image = cv2.undistort(image, K, calib[4:])
+
+        if 0:
+            image = cv2.resize(image, None, fx=0.5, fy=0.5)
+            intrinsics = np.array([fx / 2, fy / 2, cx / 2, cy / 2])
+
+        else:
+            intrinsics = np.array([fx, fy, cx, cy])
+        print("intrinsics", intrinsics)
+        h, w, _ = image.shape
+        image = image[:h-h%16, :w-w%16]
+        depth = depth[:h-h%16, :w-w%16]
+        # print("intrinsics", intrinsics)
+        # queue.put((t, image, intrinsics))
+        yield (t, image, intrinsics, depth)
+
+    # queue.put((-1, image, intrinsics))
+    yield (-1, image, intrinsics, depth) 
+
+
+def dataset_depth_stream(queue, imagedir, depthdir, calib, stride, skip=0, mode='replica'):
+    """ image generator """
+
+    calib = np.loadtxt(calib, delimiter=" ")
+    fx, fy, cx, cy = calib[:4]
+
+    K = np.eye(3)
+    K[0,0] = fx
+    K[0,2] = cx
+    K[1,1] = fy
+    K[1,2] = cy
+
+    img_exts = ["*.png", "*.jpeg", "*.jpg"]
+    image_list = sorted(chain.from_iterable(Path(imagedir).glob(e) for e in img_exts))[skip::stride]
+    # for replica
+    if mode == 'replica':
+        image_list = sorted(image_list, key=lambda x: int(str(x).split('/')[-1].split('.')[0].split('_')[-1]))
+    
+    depth_exts = ["*.npy"]
+    depth_list = sorted(chain.from_iterable(Path(depthdir).glob(e) for e in depth_exts))[skip::stride]
+
+    print(image_list[:5])
+
+    for t, imfile in enumerate(image_list):
+        image = cv2.imread(str(imfile))
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+        depth = np.load(depth_list[t])
+
+        if len(calib) > 4:
+            image = cv2.undistort(image, K, calib[4:])
+
+        if 0:
+            image = cv2.resize(image, None, fx=0.5, fy=0.5)
+            intrinsics = np.array([fx / 2, fy / 2, cx / 2, cy / 2])
+
+        else:
+            intrinsics = np.array([fx, fy, cx, cy])
+            
+        h, w, _ = image.shape
+        image = image[:h-h%16, :w-w%16]
+
+        # queue.put((t, image, intrinsics))
+        yield (t, image, intrinsics, depth)
+
+    # queue.put((-1, image, intrinsics))
+    yield (-1, image, intrinsics, depth)
+  
 
 def dataset_stream(queue, imagedir, calib, stride, skip=0, mode='replica'):
     """ image generator """

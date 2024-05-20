@@ -1,15 +1,16 @@
 
 DATASET=/storage/user/chwe/Datasets/TartanAir_shibuya
-SAVEDIR=logs/shibuya/cotracker_kernel_v2_cauchy_delta_anchor_50k_kf2_S16_init8_p64_s0.1_backward
+SAVEDIR=logs/mpi_sintel_depth_init/shibuya/cotracker_kernel_v2_cauchy_delta_anchor_50k_kf2_S16_init8_p64_s0.1_backward
 mkdir -p $SAVEDIR
 echo $(date "+%Y-%m-%d %H:%M:%S") >> $SAVEDIR/error_sum.txt
 # Standing01 Standing02 RoadCrossing03 RoadCrossing04 RoadCrossing05 RoadCrossing06 RoadCrossing07
 for SCENE in Standing01 Standing02 RoadCrossing03 RoadCrossing04 RoadCrossing05 RoadCrossing06 RoadCrossing07
 do
-    python leapvo/cotrackerslam.py \
+    python leapvo/cotrackerslam_depth_init.py \
             --config-path=../configs \
             --config-name=cotrackerslam_cotracker_kernel_v2_cauchy_delta \
             data.imagedir=$DATASET/$SCENE/image_0 \
+            +data.depthdir=$DATASET/monodepth/zoedepth/$SCENE \
             data.gt_traj=$DATASET/$SCENE/gt_pose.txt \
             data.savedir=$SAVEDIR \
             data.calib=calibs/tartan_shibuya.txt \

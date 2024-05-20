@@ -1,16 +1,17 @@
 
 DATASET=/storage/user/chwe/Datasets/MPI-Sintel-complete/training
-SAVEDIR=logs/mpi_sintel_debug_se3/cotracker_kernel_v2_cauchy_delta_kf2_S12_init8_s0.1_conf.8_backward_p100
+SAVEDIR=logs/mpi_sintel_depth_init/cotracker_kernel_v2_cauchy_delta_kf2_S12_init8_s0.1_conf.8_backward_p100
 mkdir -p $SAVEDIR
 echo $(date "+%Y-%m-%d %H:%M:%S") >> $SAVEDIR/error_sum.txt
 # alley_2 ambush_4 ambush_5 ambush_6 cave_2 cave_4 market_2 market_5 market_6 shaman_3 sleeping_1 sleeping_2 temple_2 temple_3
-for SCENE in temple_2 
+for SCENE in cave_2
 do
     SCENE_PATH=$DATASET/final/$SCENE
-    python leapvo/cotrackerslam.py \
+    python leapvo/cotrackerslam_depth_init.py \
     --config-path=../configs \
     --config-name=cotrackerslam_cotracker_kernel_v2_cauchy_delta \
     data.imagedir=$SCENE_PATH \
+    +data.depthdir=$DATASET/monodepth/zoedepth/$SCENE \
     data.gt_traj=$DATASET/cam_traj/$SCENE/traj_w_c_tum.txt \
     data.savedir=$SAVEDIR \
     data.calib=$DATASET/camdata_left/$SCENE \
@@ -32,7 +33,7 @@ do
     slam.CONF_QUANTILE=0.8 \
     slam.STATIC_QUANTILE=0.0 \
     slam.STATIC_THRESHOLD=0.1 \
-    save_results=true \
+    save_results=false \
     # --config-name=pipsmultislam_new \
 done
 
