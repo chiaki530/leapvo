@@ -73,14 +73,11 @@ def eval_metrics(pred_traj, gt_traj=None, seq="", filename=""):
     traj_ref = gt_traj
     traj_est = pred_traj
     
-    print("Seq " + seq)
     ate_result = main_ape.ape(traj_ref, traj_est, est_name='traj',
         pose_relation=PoseRelation.translation_part, align=True, correct_scale=True)
 
-    # print(result)
     ate = ate_result.stats['rmse']
 
-    print("Seq " + seq)
     # RPE rotation and translation
     delta_list = [1]
     rpe_rots, rpe_transs = [], []
@@ -92,9 +89,6 @@ def eval_metrics(pred_traj, gt_traj=None, seq="", filename=""):
         rot = rpe_rots_result.stats['rmse']
         rpe_rots.append(rot)
 
-    # print(np.mean(rpe_rots))
-    
-    print("Seq " + seq)
     for delta in delta_list:
         rpe_transs_result = main_rpe.rpe(traj_ref, traj_est, est_name='traj',
             pose_relation=PoseRelation.translation_part, align=True, correct_scale=True,
@@ -102,7 +96,6 @@ def eval_metrics(pred_traj, gt_traj=None, seq="", filename=""):
 
         trans = rpe_transs_result.stats['rmse']
         rpe_transs.append(trans)
-    # print(np.mean(rpe_transs))
     
     rpe_trans, rpe_rot = np.mean(rpe_transs), np.mean(rpe_rots)
     with open(filename, 'w+') as f:
@@ -111,7 +104,7 @@ def eval_metrics(pred_traj, gt_traj=None, seq="", filename=""):
         f.write(f"{rpe_rots_result}")
         f.write(f"{rpe_transs_result}")
         
-    print(f"Saved {filename}")
+    print(f"Save results to {filename}")
     return ate, rpe_trans, rpe_rot
 
 def plot_trajectory(pred_traj, gt_traj=None, title="", filename="", align=True, correct_scale=True):

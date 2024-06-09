@@ -1,27 +1,25 @@
 [![arXiv](https://img.shields.io/badge/arXiv-LEAPVO-red)](https://arxiv.org/abs/2403.18913)
 
-# LEAP-VO: Long-term Effective Any Point Tracking for Visual Odometry [CVPR 2024]
+# LEAP-VO 
+**[CVPR 2024]** The repository contains the official implementation of our paper:
 
-![](assets/butterfly-3d-tracks.gif)
+> **LEAP-VO: Long-term Effective Any Point Tracking for Visual Odometry**<br> 
+> by [Weirong Chen](https://chiaki530.github.io/), [Le Chen](https://clthegoat.github.io/), [Rui Wang](https://rui2016.github.io/), and [Marc Pollefeys](https://people.inf.ethz.ch/marc.pollefeys/)
 
-> [**LEAP-VO: Long-term Effective Any Point Tracking for Visual Odometry**](https://chiaki530.github.io/projects/leapvo/),  
-> Weirong Chen, Le Chen, Rui Wang, Marc Pollefeys,
-> CVPR 2024
-> *Paper at [arxiv](https://arxiv.org/abs/2401.01887)*  
+**[[Paper](https://arxiv.org/abs/2401.01887)] [[Project Page](https://chiaki530.github.io/projects/leapvo/)]**
 
-
-## News and ToDo
+## Todo
 - [ ] Improve LEAPVO visualization.
 - [ ] Release LEAPVO training code.
 - [ ] Release LEAPVO inference code and checkpoints.
 
-## Requirements 
+## Setup and Installation 
 To get started with the code, clone this repository and install the required dependencies:
 ```
 git clone https://github.com/felix-ch/f3loc.git
 cd f3loc
 conda env create -f environment.yml
-conda activate f3loc
+conda activate leap (use leap environment)
 ```
 
 ## Models and Data 
@@ -47,10 +45,10 @@ bash scripts/eval/run_cotrackerslam_tartanair_shibuya_cvpr.sh
 ```
 
 
-## Citation
-If you use this project or ideas from the paper for your research, please cite our paper:
+## Citations
+If you find our repository useful, please consider citing our paper in your work:
 ```
-@inproceedings{chen2024leap,
+@article{chen2024leap,
   title={LEAP-VO: Long-term Effective Any Point Tracking for Visual Odometry},
   author={Chen, Weirong and Chen, Le and Wang, Rui and Pollefeys, Marc},
   journal={arXiv preprint arXiv:2401.01887},
@@ -58,7 +56,7 @@ If you use this project or ideas from the paper for your research, please cite o
 }
 ```
 ## Acknowledgement
-We sincerely thank the authors of the following repositories for publicly releasing their work:
+We sincerely thank the authors of the following repositories for publicly releasing their code and data: [PIPs](https://github.com/aharley/pips), [CoTracker](https://github.com/facebookresearch/co-tracker), [TAP-Vid](https://github.com/google-deepmind/tapnet), [DPVO](https://github.com/princeton-vl/DPVO), [ParticleSfM](https://github.com/bytedance/particle-sfm). 
 
 
 ## License

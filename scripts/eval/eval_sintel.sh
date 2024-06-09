@@ -15,9 +15,8 @@ do
     data.calib=$DATASET/camdata_left/$SCENE \
     data.name=sintel-$SCENE \
     save_video=false \
-    plot=true \
+    save_plot=true \
     save_trajectory=true \
-    save_results=false \
     viz=false
 done
 

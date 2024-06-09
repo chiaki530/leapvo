@@ -3,12 +3,13 @@ import math
 
 from src.leapvo import LEAPVO
 from src.stream import sintel_stream, dataset_stream
-from src.rerun_visualizer import vis_rerun
+# from src.rerun_visualizer import vis_rerun
 from src.plot_utils import plot_trajectory, save_trajectory_tum_format, eval_metrics, load_traj, load_timestamps
 
 import torch
 import hydra
 from omegaconf import DictConfig
+from tqdm import tqdm
 
 import pdb
 
@@ -29,7 +30,7 @@ def main(cfg: DictConfig):
 
     image_list = []
     intrinsics_list = []
-    for i, (t, image, intrinsics) in enumerate(dataloader):
+    for i, (t, image, intrinsics) in enumerate(tqdm(dataloader)):
 
         if "max_length" in cfg.data and i >= cfg.data.max_length: break
         if t < 0: break
@@ -43,7 +44,7 @@ def main(cfg: DictConfig):
         if slam is None:
             slam = LEAPVO(cfg, ht=image.shape[1], wd=image.shape[2])
 
-        slam(t, image, intrinsics, depth_g=None, cam_g=None)
+        slam(t, image, intrinsics)
 
     pred_traj = slam.terminate()
 
@@ -61,14 +62,10 @@ def main(cfg: DictConfig):
 
     os.makedirs(f"{cfg.data.savedir}/{cfg.data.name}", exist_ok=True)
 
-    if cfg.save_results:
-        save_results_path  = f"{cfg.data.savedir}/{cfg.data.name}/saved_results.npz"
-        slam.save_results(save_results_path, imagedir=cfg.data.imagedir)
-
     if cfg.save_trajectory:
         save_trajectory_tum_format(pred_traj, f"{cfg.data.savedir}/{cfg.data.name}/leapvo_traj.txt")
 
-    if cfg.plot:
+    if cfg.save_plot:
         plot_trajectory(pred_traj, gt_traj=gt_traj, title=f"LEAPVO Trajectory Prediction for {cfg.exp_name}", filename=f"{cfg.data.savedir}/{cfg.data.name}/traj_plot.pdf")
     
     if cfg.save_video:
@@ -82,9 +79,9 @@ def main(cfg: DictConfig):
         f.write(line)
 
 
-    # visualization
-    if cfg.viz:
-        vis_rerun(slam, image_list, intrinsics_list)
+    # # visualization
+    # if cfg.viz:
+    #     vis_rerun(slam, image_list, intrinsics_list)
 
 
 

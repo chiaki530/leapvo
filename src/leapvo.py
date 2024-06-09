@@ -6,7 +6,6 @@ from src.backend import altcorr, lietorch
 from src.backend.lietorch import SE3
 from src.backend import projective_ops as pops
 from src.backend.ba import BA
-from src.plot_utils import save_pips_plot
 from src.slam_visualizer import CoTrackerSLAMVisualizer
 from src.timer import Timer
 
@@ -40,28 +39,6 @@ def coords_grid_with_index(d, **kwargs):
     index = index.view(1, n, 1, 1, 1).repeat(b, 1, 1, h, w)
 
     return coords, index
-
-
-def ransac_mask(kpts0, kpts1, K0, K1, ransac, thresh=1.0, conf=0.99999):
-    if len(kpts0) < 5:
-        return None
-
-    f_mean = np.mean([K0[0, 0], K1[1, 1], K0[0, 0], K1[1, 1]])
-    norm_thresh = thresh / f_mean
-
-    kpts0 = (kpts0 - K0[[0, 1], [2, 2]][None]) / K0[[0, 1], [0, 1]][None]
-    kpts1 = (kpts1 - K1[[0, 1], [2, 2]][None]) / K1[[0, 1], [0, 1]][None]
-
-    if ransac:
-        E, mask = cv2.findEssentialMat(
-            kpts0, kpts1, np.eye(3), threshold=norm_thresh,
-            prob=conf,
-            method=cv2.RANSAC)
-    else:
-        E, mask = cv2.findFundamentalMat(
-            kpts0, kpts1,  method=cv2.FM_8POINT
-        )
-    return mask.ravel() > 0
     
 
 class LEAPVO:
@@ -75,7 +52,6 @@ class LEAPVO:
         self.S = cfg.model.S
         self.is_initialized = False
         self.enable_timing = False
-        self.save_pips = cfg.save_pips
         self.pred_back = cfg.pred_back if 'pred_back' in cfg else None
         
         
@@ -139,8 +115,6 @@ class LEAPVO:
         self.kf_stride = cfg.slam.kf_stride
         self.interp_shape = (384, 512)
 
-
-        self.load_gt = cfg.load_gt
         save_dir = f"{cfg.data.savedir}/{cfg.data.name}"
 
         self.use_forward = cfg.slam.use_forward if 'use_forward' in cfg.slam else True
@@ -223,7 +197,7 @@ class LEAPVO:
             grid_y = 8 + grid_y.reshape(B, -1)/float(M_-1) * (self.ht-16)
             grid_x = 8 + grid_x.reshape(B, -1)/float(M_-1) * (self.wd-16)
             coords = torch.stack([grid_x, grid_y], dim=-1) # B, N_*N_, 2
-            
+
         elif self.cfg.slam.PATCH_GEN == 'random':
             x = torch.randint(1, self.wd-1, size=[1, self.M], device="cuda")
             y = torch.randint(1, self.ht-1, size=[1, self.M], device="cuda")
@@ -370,26 +344,6 @@ class LEAPVO:
             kf_idx,
             torch.arange(max(self.n-self.S_slam, 0), self.n, device="cuda"), indexing='ij')
     
-    def __edges_forw(self):
-        """Edge between previous patches and the current frame
-        """
-        r=self.cfg.slam.PATCH_LIFETIME
-        t0 = self.M * max((self.n - r), 0)
-        t1 = self.M * max((self.n - 1), 0)
-        return flatmeshgrid(
-            torch.arange(t0, t1, device="cuda"),
-            torch.arange(self.n-1, self.n, device="cuda"), indexing='ij')
-
-    def __edges_back(self):
-        """Edge between current patches and the previous edge
-        """
-        r=self.cfg.slam.PATCH_LIFETIME
-        t0 = self.M * max((self.n - 1), 0)
-        t1 = self.M * max((self.n - 0), 0)
-        # print("__edges_back", t0, t1, max(self.n-r, 0), self.n)
-        return flatmeshgrid(torch.arange(t0, t1, device="cuda"),
-            torch.arange(max(self.n-self.S, 0), self.n, device="cuda"), indexing='ij')
-
 
     def get_gt_trajs(self, xys, xys_sid):
         """Compute the gt trajectories from ground truth depth and camera pose
@@ -501,22 +455,6 @@ class LEAPVO:
                 coords_init = rearrange(coords_init, 'b s1 (s2 m) c -> b s1 s2 m c', s2=S, m=self.M)
                 patch_valids = repeat(self.patches_valid_[self.n-S: self.n-1], 's2 m -> b s1 s2 m c', b=B, s1=S-1, c=2).bool()
                 coords_init[:,:S-1,:S-1][patch_valids] = coords[patch_valids]
-                coords_init = rearrange(coords_init, 'b s1 s2 m c -> b s1 (s2 m) c')
-                
-            elif self.cfg.slam.TRAJ_INIT in ['flow', 'gt']:
-                last_target = self.last_target if self.cfg.slam.TRAJ_INIT == 'flow' else self.last_target_gt
-                last_valid = self.last_valid if self.cfg.slam.TRAJ_INIT == 'flow' else self.last_valid_gt
-                
-                last_target = rearrange(self.last_target, 'b s1 (s2 m) c -> b s1 s2 m c', s2=S, m=self.M)
-                last_valid = rearrange(self.last_valid, 'b s1 (s2 m) -> b s1 s2 m', s2=S, m=self.M)
-                
-                padding = 20
-                boundary_mask = (last_target[...,0] >= padding) & (last_target[...,0] < self.wd - padding) & (last_target[...,1] >= padding) & (last_target[...,1] < self.ht - padding) 
-                last_valid = last_valid & boundary_mask.to(last_valid.device)
-                
-                coords_init = rearrange(coords_init, 'b s1 (s2 m) c -> b s1 s2 m c', s2=S, m=self.M)
-                last_valid = last_valid[:,1:, 1:]
-                coords_init[:,:S-1,:S-1][last_valid] = last_target[:,1:,1:][last_valid]
                 coords_init = rearrange(coords_init, 'b s1 s2 m c -> b s1 (s2 m) c')
  
         return xys, xys_sid, coords_init
@@ -638,7 +576,7 @@ class LEAPVO:
         if self.is_initialized:
             query_valid = self.patches_valid_[self.n-len(self.local_window):self.n:self.kf_stride]
             valid_from_filter = (vis_label.sum(dim=1) > 3) 
-            query_valid = torch.logical_or(query_valid.reshape(-1), valid_from_filter)
+            query_valid = torch.logical_or(query_valid.reshape(1,-1), valid_from_filter)
             self.patches_valid_[self.n-len(self.local_window):self.n:self.kf_stride] = query_valid.reshape(-1, self.M)
 
         stats = {
@@ -659,39 +597,18 @@ class LEAPVO:
     def predict_target(self):
         # predict target        
         with torch.no_grad():
-            if self.cfg.use_gt_traj:
-                xys, xys_sid = self.get_window_trajs(only_coords=True)
-            else:
-                trajs, vis_label, queries, stats, = self.get_window_trajs()
-                xys_sid = queries[...,0]
-                xys = queries[...,1:]
-            
-        if self.cfg.load_gt:
-            trajs_gt, valid_gt = self.get_gt_trajs(xys, xys_sid)
-        else:
-            trajs_gt = None
-            valid_gt = None
+            trajs, vis_label, queries, stats, = self.get_window_trajs()
 
         # save predictions
         self.last_target = trajs
         self.last_valid = vis_label 
-        
-        if self.cfg.load_gt:
-            self.last_target_gt = trajs_gt
-            self.last_valid_gt = torch.all(valid_gt > 0, dim=-1)
+
         
         B, S, N, C = trajs.shape
         local_target = rearrange(trajs, 'b s n c -> b (n s) c')
         
         # predict weight 
-        if self.cfg.load_gt:
-            if valid_gt.float().mean() < 1.0:
-                self.invalid_frames.append(self.n)
-
-        if self.cfg.use_gt_traj:
-            local_weight = rearrange(valid_gt.float(), 'b s n c -> b (n s) c')
-        else:
-            local_weight = torch.ones_like(local_target)
+        local_weight = torch.ones_like(local_target)
         
         vis_label = rearrange(vis_label, 'b s n -> b (n s)')
         local_weight[~vis_label] = 0
@@ -701,13 +618,6 @@ class LEAPVO:
         boundary_mask = (local_target[...,0] >= padding) & (local_target[...,0] < self.wd - padding) & (local_target[...,1] >= padding) & (local_target[...,1] < self.ht - padding) 
         local_weight[~boundary_mask] = 0 
         
-        # check if some frame has too fewer matches
-        if 'MIN_VALID_PATCH' in self.cfg.slam and self.cfg.slam.MIN_VALID_PATCH > 0:
-            patch_valid = (local_weight > 0).any(dim=-1)    
-            patch_valid = rearrange(patch_valid, 'b (n s) -> b s n', s=S, n=N)
-            frame_valid = (patch_valid.sum(dim=2) >= self.cfg.slam.MIN_VALID_PATCH)
-            frame_mask = repeat(frame_valid, 'b s -> b (n s)', n=N)
-            local_weight[~frame_mask] = 0
             
         # check track length
         if self.n >= self.cfg.slam.MIN_TRACK_LEN:
@@ -739,31 +649,7 @@ class LEAPVO:
 
 
         self.visualizer.add_track(vis_data)
-    
-        # evaluate 
-        if self.cfg.load_gt:
-            valid_gt = (valid_gt).any(dim=-1)
-            valid_pred = rearrange((local_weight > 0).any(dim=-1), ' b (n s) -> b s n', n=N, s=S)
-            
-            masked_ate = self.eval_ate(trajs, trajs_gt, valid_pred, valid_gt)
-            
-            if self.save_pips and self.n > 1 and masked_ate > self.cfg.save_pips_min_ate:
-                rgbs = torch.stack(self.local_window, dim=0).unsqueeze(0) 
-                if torch.isnan(trajs_gt).any():
-                    pdb.set_trace()
-                save_pips_path = os.path.join(self.save_dir,'saved_images')
-                Path(save_pips_path).mkdir(exist_ok=True)
-                save_pips_plot(
-                    rgbs[0].detach().cpu().numpy(), 
-                    trajs[0].detach().cpu().numpy(),
-                    trajs_gt[0].detach().cpu().numpy(), 
-                    self.n, 
-                    save_pips_path, 
-                    start_idx=max(0, self.n-self.S),
-                    valid_label=valid_pred[0].detach().cpu().numpy(),
-                    valid_gt=valid_gt[0].detach().cpu().numpy()
-                )
-      
+
     def update(self):
         # lmbda
         lmbda = torch.as_tensor([1e-4], device="cuda")
@@ -820,10 +706,7 @@ class LEAPVO:
         return poses, tstamps
     
     
-    def eval_pose():
-        pass
-    
-    def __call__(self, tstamp, image, intrinsics, depth_g=None, cam_g=None):
+    def __call__(self, tstamp, image, intrinsics):
         """main function of tracking
 
         Args:
@@ -845,12 +728,6 @@ class LEAPVO:
         # image preprocessing   
         self.preprocess(image, intrinsics)
         
-        # for debug
-        if depth_g is not None and cam_g is not None:
-            self.store_gt(depth_g, cam_g)
-        
-        # print("local_window", len(self.local_window))
-        
         # generate patches
         patches, clr = self.generate_patches(image)
         
@@ -865,23 +742,13 @@ class LEAPVO:
         if self.n % self.kf_stride == 0 and not self.is_initialized:  
             self.patches_valid_[self.n] = 1
 
-        # color info for visualization
-        # clr = (clr[0,:,[2,1,0]] + 0.5) * (255.0 / 2)
-        # self.colors_[self.n] = clr.to(torch.uint8)
-                
         # pose initialization with motion model
         self.init_motion()
                 
-        # update states
-        # self.index_[self.n + 1] = self.n + 1
-        # self.index_map_[self.n + 1] = self.m + self.M
-        # initialize the mapping of the current frame
         self.tlist.append(tstamp)
         self.tstamps_[self.n] = self.counter
 
         
-        # color info for visualization
-        # clr = clr[0,:,[2,1,0]]
         clr = clr[0]
         self.colors_[self.n] = clr.to(torch.uint8)
 
@@ -899,56 +766,20 @@ class LEAPVO:
             self.predict_target()
 
         if self.n == self.cfg.slam.num_init and not self.is_initialized:
-            print("initialized !")
             self.is_initialized = True            
             # one initialized, run global BA
             for itr in range(12):
                 self.update()
-            
-            if self.cfg.slam.USE_SCALE_NORM:
-                self.normalize_scale()
 
         elif self.is_initialized:
             self.update()
             self.keyframe()
-
-
-        # self.eval_pose()
-        if self.cfg.load_gt:
-            self.print_stats()
-
-        # if self.cfg.save_results:
-        #     self.save_results()
 
         torch.cuda.empty_cache()
 
     def keyframe(self):
         to_remove = self.ix[self.kk] < self.n - self.cfg.slam.REMOVAL_WINDOW
         self.remove_factors(to_remove)
-
-    def print_stats(self):
-        line = "[metrics]"
-        for name, metric_list in self.metrics.items():
-            # line += f" {name}: {np.mean(metric_list)}"
-            line += f" {name}: {metric_list[-1]}"
-        print(line)
-
-        # print("invalid", self.invalid_frames)
-    
-    # def save_results(self):
-    #     """Save the camera pose and 3D point at the moment
-    #     """
-    #     Gs = SE3(self.poses_).detach()
-    #     pose = Gs.matrix()[:self.n].float().detach().cpu().numpy()
-    #     pts = self.points_[:self.n * self.M].float().detach().cpu().numpy()
-    #     clr = self.colors_[:self.n].reshape(-1,3).float().detach().cpu().numpy()
-        
-    #     pts_valid = self.patches_valid_[:self.n].reshape(-1).detach().cpu().numpy()
-
-    #     save_results_path = os.path.join(self.save_dir,'saved_results')
-    #     Path(save_results_path).mkdir(exist_ok=True)
-    #     save_name = os.path.join(save_results_path, f'{self.n}.npz')
-    #     np.savez(save_name, pose=pose, pts=pts, clr=clr, pts_valid=pts_valid)
 
     def get_results(self):
         self.traj = {}
@@ -960,9 +791,6 @@ class LEAPVO:
         poses = poses.inv().matrix().data.cpu().numpy()
         tstamps = np.array(self.tlist, dtype=float)
 
-
-        # Gs = SE3(self.poses_[:]).detach()
-        # pose = Gs.matrix()[:self.n].float().detach().cpu().numpy()
         pts = self.points_[:self.counter * self.M].reshape(-1,self.M, 3).float().detach().cpu().numpy()
         clrs = self.colors_[:self.counter].float().detach().cpu().numpy()
         pts_valid = self.patches_valid_[:self.counter].detach().cpu().numpy()
@@ -971,31 +799,6 @@ class LEAPVO:
 
         patches = self.patches_[:self.counter,:, :, self.P//2, self.P//2].detach().cpu().numpy()
         return poses, intrinsics, pts, clrs, pts_valid, patches, tstamps
-
-
-    def save_results(self, save_path, imagedir):
-        """Save the camera pose and 3D point at the moment
-        """
-
-        
-        # save_results_path = os.path.join(self.save_dir,'saved_results.npz')
-        # Path(save_path).mkdir(exist_ok=True)
-        # save_name = os.path.join(save_results_path, f'{self.counter}.npz')
-        # save_path = os.path.join(save_dir, save_name)
-        poses, intrinsics, pts, clrs, pts_valid, patches, tstamps = self.get_results()
-        np.savez(
-            save_path, 
-            imagedir=imagedir,
-            poses=poses, 
-            intrinsics=intrinsics,
-            pts=pts, 
-            clrs=clrs, 
-            pts_valid=pts_valid, 
-            patches=patches,
-            tstamps=tstamps
-        )
-        print("save results", save_path, self.counter)
-
 
 
 def get_replica_intrinsics():

@@ -6,10 +6,10 @@ slam:
   OPTIMIZATION_WINDOW: 15
   PATCH_LIFETIME: 12
 
-  PATCHES_PER_FRAME: 100
+  PATCHES_PER_FRAME: 64
   BUFFER_SIZE: 1024
 
-  PATCH_GEN: grid_grad_10
+  PATCH_GEN: grid_grad_8
   
   ITER: 4
 
@@ -50,7 +50,7 @@ data:
   gt_traj: ''
   name: ''
   savedir: ''
-  traj_format: sintel
+  traj_format: kitti_tum
 
 model:
   S: 8
@@ -82,7 +82,7 @@ model:
     S: 8
   init_dir: weights/resume_cauchy_delta_notime_anchor_nll1_50k_lr3e-4_20231114/11-15_01-40-57/checkpoints/cotracker_kernel_v2_final.pth
 
-exp_name: 'leapvo_sintel'
+exp_name: 'leapvo_shibuya'
 output_dir: ''
 save_trajectory: true
 save_video: false

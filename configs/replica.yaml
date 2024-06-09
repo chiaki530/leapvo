@@ -6,10 +6,10 @@ slam:
   OPTIMIZATION_WINDOW: 15
   PATCH_LIFETIME: 12
 
-  PATCHES_PER_FRAME: 100
+  PATCHES_PER_FRAME: 64
   BUFFER_SIZE: 1024
 
-  PATCH_GEN: grid_grad_10
+  PATCH_GEN: grid_grad_8
   
   ITER: 4
 
@@ -20,9 +20,9 @@ slam:
   MIN_TRACK_LEN: 3
   TRAJ_INIT: false
 
-  VIS_THRESHOLD: 0.9
-  STATIC_THRESHOLD: 0.1
-  STATIC_QUANTILE: 0.0
+  VIS_THRESHOLD: 0.0
+  # STATIC_THRESHOLD: 0.1
+  # STATIC_QUANTILE: 0.0
   CONF_THRESHOLD: 1.0
   CONF_QUANTILE: 0.8
   
@@ -82,7 +82,7 @@ model:
     S: 8
   init_dir: weights/resume_cauchy_delta_notime_anchor_nll1_50k_lr3e-4_20231114/11-15_01-40-57/checkpoints/cotracker_kernel_v2_final.pth
 
-exp_name: 'leapvo_sintel'
+exp_name: 'leapvo_replica'
 output_dir: ''
 save_trajectory: true
 save_video: false

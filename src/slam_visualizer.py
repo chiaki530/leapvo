@@ -333,14 +333,6 @@ class CoTrackerSLAMVisualizer(SLAMVisualizer):
             "constant",
             255,
         )
-        # video = video.permute(0,2,3,1).detach().cpu().numpy()
-
-        # res_video_sta = []
-        # res_video_dyn = []
-        # # process input video
-        # for rgb in video:
-        #     res_video_sta.append(rgb.copy())
-        #     res_video_dyn.append(rgb.copy())
 
         res_video_sta = video.clone()
         res_video_dyn = video.clone()
@@ -365,18 +357,11 @@ class CoTrackerSLAMVisualizer(SLAMVisualizer):
 
             if 'coords_vars' in track:
                 variances = track['coords_vars']
-                print(variances.mean(), variances.max(), torch.quantile(variances, 0.9))
-            #     variances = variances / variances.mean()    # normalize
-            # else:
-            #     variances = None
             
-            # plot uncertanity measurements on res_video_dyn
-            # print("variances", variances.shape)
+            # plot uncertanity 
             variances = track['coords_vars']
             var_mean = variances.mean(dim=1)
-            # low_var_th = torch.quantile(var_mean,  0.2)
             high_var_th = torch.quantile(var_mean,  0.9)   
-            # low_mask = var_mean[0] < low_var_th
             high_mask =  var_mean[0] > high_var_th
             variances = variances / variances.mean() # normalized
             
@@ -409,8 +394,6 @@ class CoTrackerSLAMVisualizer(SLAMVisualizer):
                 dyn_rgbs = res_video_dyn[fid-S:fid][None]
                 # check dynamic mask of the full track
                 static_mask = static_label[0].float().mean(dim=0) < 0.5
-                # static_mask = static_label[0].float().mean(dim=0) < 1.0
-                # static_mask = torch.zeros_like(static_mask) < 1.0
                 
                 dyn_tracks = targets.reshape(B, S, -1, C)[:,:,static_mask]
                 dyn_vis_label = vis_label[:,:,static_mask]
@@ -469,150 +452,8 @@ class CoTrackerSLAMVisualizer(SLAMVisualizer):
 
         return res_video[None].byte()
 
-    def draw_tracks_on_frames_uncertainty(self):
-        # pdb.set_trace()
-        video = torch.stack(self.frames, dim=0)
-        video = F.pad(
-            video,
-            (self.pad_value, self.pad_value, self.pad_value, self.pad_value),
-            "constant",
-            255,
-        )
-
-        res_video_sta = video.clone()
-        res_video_dyn = video.clone()
-
-        T = self.fps      # period of color repetition
-
-        for t, track in enumerate(self.tracks):
-            fid = track['fid']
-            targets = track['targets'] + self.pad_value
-            weights = track['weights']
-            queries = track['queries']
-            vis_label = track['vis_label']
-            B, S, S1, M, C = targets.shape
-
-            vector_colors = np.zeros((S, S1, M, 3))
-            for s1 in range(S1):     
-                kf_stride = self.cfg_full.slam.kf_stride
-                fid_norm = ((fid // kf_stride + s1) % T) / T
-                color = np.array(self.color_map(fid_norm)[:3]) * 255
-                vector_colors[:,s1] = repeat(color, 'c -> s m c', s=S, m=M)
-                # vector_colors[t] = repeat()
-
-            assert 'coords_vars' in track
-            variances = track['coords_vars']
-            variances = variances / variances.mean()    # normalize
-
-            # print("variances", variances.shape)
-            var_mean = variances.mean(dim=1)
-            low_var_th = torch.quantile(var_mean,  0.2)
-            high_var_th = torch.quantile(var_mean,  0.8)   
-            low_mask = var_mean[0] < low_var_th
-            high_mask =  var_mean[0] > high_var_th
-            
-
-            dyn_rgbs = res_video_dyn[fid-S:fid][None]
-            dyn_tracks = targets.reshape(B, S, -1, C)[:,:,low_mask]
-            dyn_vis_label = vis_label[:,:,low_mask]
-            dyn_colors = vector_colors.reshape(S, -1, 3)[:,low_mask.detach().cpu().numpy()]
-            
-            dyn_color = matplotlib.colors.to_rgba('lime')
-            dyn_colors[...,0] = dyn_color[0] * 255
-            dyn_colors[...,1] = dyn_color[1] * 255
-            dyn_colors[...,2] = dyn_color[2] * 255
-
-            dyn_var = variances[:,:,low_mask].detach().cpu().numpy()  if variances is not None else None
-
-            res_video = self.draw_tracks_on_video(
-                video=dyn_rgbs,
-                tracks=dyn_tracks,
-                visibility=dyn_vis_label,
-                vector_colors=dyn_colors,
-                variances=dyn_var
-            )
-            res_video_dyn[fid-S:fid] = res_video
-
-            rgbs = res_video_sta[fid-S:fid][None]
-            sta_tracks = targets.reshape(B, S, -1, C)[:,:,high_mask]
-            sta_vis_label = vis_label[:,:,high_mask]
-            sta_colors = vector_colors.reshape(S, -1, 3)[:,high_mask.detach().cpu().numpy()]
-            
-            sta_color = matplotlib.colors.to_rgba('gold')
-            sta_colors[...,0] = sta_color[0] * 255
-            sta_colors[...,1] = sta_color[1] * 255
-            sta_colors[...,2] = sta_color[2] * 255
-
-            sta_var = variances[:,:,high_mask].detach().cpu().numpy()  if variances is not None else None
-            res_video = self.draw_tracks_on_video(
-                video=rgbs,
-                tracks=sta_tracks,
-                visibility=sta_vis_label,
-                vector_colors=sta_colors,
-                variances=sta_var
-            )
-            res_video_sta[fid-S:fid] = res_video
-
-            # if 'static_label' in track:
-            #     static_label = track['static_label']
-
-            #     dyn_rgbs = res_video_dyn[fid-S:fid][None]
-            #     # check dynamic mask of the full track
-            #     static_mask = static_label[0].float().mean(dim=0) < 0.5
-                
-                
-
-
-
-            #     dyn_tracks = targets.reshape(B, S, -1, C)[:,:,static_mask]
-            #     dyn_vis_label = vis_label[:,:,static_mask]
-            #     dyn_colors = vector_colors.reshape(S, -1, 3)[:,static_mask.detach().cpu().numpy()]
-            #     dyn_var = variances[:,:,static_mask].detach().cpu().numpy()  if variances is not None else None
-
-            #     res_video = self.draw_tracks_on_video(
-            #         video=dyn_rgbs,
-            #         tracks=dyn_tracks,
-            #         visibility=dyn_vis_label,
-            #         vector_colors=dyn_colors,
-            #         variances=dyn_var
-            #     )
-            #     res_video_dyn[fid-S:fid] = res_video
-
-            #     rgbs = res_video_sta[fid-S:fid][None]
-            #     sta_tracks = targets.reshape(B, S, -1, C)[:,:,~static_mask]
-            #     sta_vis_label = vis_label[:,:,~static_mask]
-            #     sta_colors = vector_colors.reshape(S, -1, 3)[:,~static_mask.detach().cpu().numpy()]
-            #     sta_var = variances[:,:,~static_mask].detach().cpu().numpy()  if variances is not None else None
-            #     res_video = self.draw_tracks_on_video(
-            #         video=rgbs,
-            #         tracks=sta_tracks,
-            #         visibility=sta_vis_label,
-            #         vector_colors=sta_colors,
-            #         variances=sta_var
-            #     )
-            #     res_video_sta[fid-S:fid] = res_video
-            # else:
-            #     rgbs = res_video_sta[fid-S:fid][None]
-            #     res_video = self.draw_tracks_on_video(
-            #         video=rgbs,
-            #         tracks=targets.reshape(B, S, -1, C),
-            #         visibility=vis_label,
-            #         vector_colors = vector_colors.reshape(S, -1, 3),
-            #     )
-
-            #     res_video_sta[fid-S:fid] = res_video
-
-
-        res_video = torch.cat([res_video_dyn, res_video_sta], dim=-1)
-
-        return res_video[None].byte()
-
-    
-    
     def save_video(self, filename, writer=None, step=0):
         video = self.draw_tracks_on_frames()
-        # FIXME: only for plotting
-        # video = self.draw_tracks_on_frames_uncertainty()
 
         # export video
         if writer is not None:
