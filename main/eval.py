@@ -1,17 +1,15 @@
 import os
 import math
 
-from src.leapvo import LEAPVO
-from src.stream import sintel_stream, dataset_stream
-# from src.rerun_visualizer import vis_rerun
-from src.plot_utils import plot_trajectory, save_trajectory_tum_format, eval_metrics, load_traj, load_timestamps
-
 import torch
 import hydra
 from omegaconf import DictConfig
 from tqdm import tqdm
 
-import pdb
+from main.leapvo import LEAPVO
+from main.stream import sintel_stream, dataset_stream
+from main.utils import plot_trajectory, save_trajectory_tum_format, eval_metrics, load_traj, load_timestamps
+
 
 @hydra.main(version_base=None, config_path="configs", config_name="leapvo_sintel")
 def main(cfg: DictConfig):

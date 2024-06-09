@@ -1,7 +1,6 @@
 import os
 import cv2
 import numpy as np
-from multiprocessing import Process, Queue
 from pathlib import Path
 from itertools import chain
 
@@ -20,7 +19,7 @@ def load_depth(filename):
     return depth
 
 
-def cam_read(filename):
+def cam_read_sintel(filename):
     """ Read camera data, return (M,N) tuple.
     
     M is the intrinsic matrix, N is the extrinsic matrix, so that
@@ -46,7 +45,7 @@ def sintel_stream(queue, imagedir, calib_root, stride, skip=0):
         image = cv2.imread(str(imfile))
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         camfile = str(imfile).split('/')[-1].replace('.png','.cam')
-        K, _ = cam_read(os.path.join(calib_root, camfile))
+        K, _ = cam_read_sintel(os.path.join(calib_root, camfile))
         fx, fy, cx, cy = K[0,0], K[1,1], K[0,2], K[1,2]
         calib = [fx, fy, cx, cy]
         if len(calib) > 4:
@@ -60,11 +59,8 @@ def sintel_stream(queue, imagedir, calib_root, stride, skip=0):
             intrinsics = np.array([fx, fy, cx, cy])
         h, w, _ = image.shape
         image = image[:h-h%16, :w-w%16]
-        # print("intrinsics", intrinsics)
-        # queue.put((t, image, intrinsics))
         yield (t, image, intrinsics)
 
-    # queue.put((-1, image, intrinsics))
     yield (-1, image, intrinsics) 
   
 

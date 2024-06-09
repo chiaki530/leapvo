@@ -2,8 +2,6 @@ import torch
 from torch_scatter import scatter_sum
 import backend.projective_ops as pops
 
-import pdb
-
 class CholeskySolver(torch.autograd.Function):
     @staticmethod
     def forward(ctx, H, b):

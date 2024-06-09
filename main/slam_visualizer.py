@@ -2,17 +2,11 @@ import os
 import numpy as np
 import cv2
 import torch
-# import flow_vis
 
-from matplotlib import cm
-import matplotlib
+import matplotlib as mpl
 import torch.nn.functional as F
-import torchvision.transforms as transforms
 from moviepy.editor import ImageSequenceClip
-import matplotlib.pyplot as plt
-
 from einops import rearrange, repeat
-import pdb
 
 def read_video_from_path(path):
     cap = cv2.VideoCapture(path)
@@ -50,9 +44,9 @@ class SLAMVisualizer:
             self.save_dir = save_dir
 
         if self.cfg.mode == "rainbow":
-            self.color_map = cm.get_cmap("gist_rainbow")
+            self.color_map = mpl.colormaps['gist_rainbow']
         elif self.cfg.mode == "cool":
-            self.color_map = cm.get_cmap(self.cfg.mode)
+            self.color_map = mpl.colormaps[self.cfg.mode]
         self.show_first_frame = self.cfg.show_first_frame
         self.grayscale = self.cfg.grayscale
         self.tracks_leave_trace = self.cfg.tracks_leave_trace
@@ -74,7 +68,6 @@ class SLAMVisualizer:
         self.tracks.append(track)
 
     def draw_tracks_on_frames(self):
-        # pdb.set_trace()
         video = torch.stack(self.frames, dim=0)
         video = F.pad(
             video,
@@ -192,20 +185,13 @@ class SLAMVisualizer:
             print(f"Video saved to {save_path}")
 
 
-class CoTrackerSLAMVisualizer(SLAMVisualizer):
+class LEAPVisualizer(SLAMVisualizer):
     def __init__(
         self,
         cfg,
         save_dir=None,
-        # grayscale: bool = False,
-        # pad_value: int = 0,
-        # fps: int = 10,
-        # mode: str = "rainbow",  # 'cool', 'optical_flow'
-        # linewidth: int = 2,
-        # show_first_frame: int = 10,
-        # tracks_leave_trace: int = 0,  # -1 for infinite
     ):
-        super(CoTrackerSLAMVisualizer, self).__init__(cfg=cfg, save_dir=save_dir)
+        super(LEAPVisualizer, self).__init__(cfg=cfg, save_dir=save_dir)
 
     def add_frame(self, frame):
         self.frames.append(frame)
@@ -325,7 +311,6 @@ class CoTrackerSLAMVisualizer(SLAMVisualizer):
         return torch.from_numpy(np.stack(res_video)).permute(0, 3, 1, 2)
     
     def draw_tracks_on_frames(self):
-        # pdb.set_trace()
         video = torch.stack(self.frames, dim=0)
         video = F.pad(
             video,
@@ -370,7 +355,7 @@ class CoTrackerSLAMVisualizer(SLAMVisualizer):
             dyn_vis_label = vis_label[:,:,high_mask]
             dyn_colors = vector_colors.reshape(S, -1, 3)[:,high_mask.detach().cpu().numpy()]
             
-            dyn_color = matplotlib.colors.to_rgba('yellow')
+            dyn_color = mpl.colors.to_rgba('yellow')
             dyn_colors[...,0] = dyn_color[0] * 255
             dyn_colors[...,1] = dyn_color[1] * 255
             dyn_colors[...,2] = dyn_color[2] * 255
@@ -399,7 +384,7 @@ class CoTrackerSLAMVisualizer(SLAMVisualizer):
                 dyn_vis_label = vis_label[:,:,static_mask]
                 dyn_colors = vector_colors.reshape(S, -1, 3)[:,static_mask.detach().cpu().numpy()]
                 
-                dyn_color = matplotlib.colors.to_rgba('red')
+                dyn_color = mpl.colors.to_rgba('red')
                 dyn_colors[...,0] = dyn_color[0] * 255
                 dyn_colors[...,1] = dyn_color[1] * 255
                 dyn_colors[...,2] = dyn_color[2] * 255
@@ -421,7 +406,7 @@ class CoTrackerSLAMVisualizer(SLAMVisualizer):
                 sta_colors = vector_colors.reshape(S, -1, 3)[:,~static_mask.detach().cpu().numpy()]
                 
                 # use one color
-                sta_color = matplotlib.colors.to_rgba('lawngreen')
+                sta_color = mpl.colors.to_rgba('lawngreen')
                 sta_colors[...,0] = sta_color[0] * 255
                 sta_colors[...,1] = sta_color[1] * 255
                 sta_colors[...,2] = sta_color[2] * 255

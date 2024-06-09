@@ -3,15 +3,7 @@ import numpy as np
 import pdb
 
 def vis_rerun(slam, image_list, intrinsics_list):
-
     poses, intrinsics, pts, clrs, pts_valid, patches, tstamps = slam.get_results()
-    # poses, [S, 4, 4]
-    # intrinsics [S, 4]
-    # pts, [S, N, 3]
-    # clrs [S, N, 3]
-    # pts_valid [S, N]
-    # tstamps [S]
-    # image_list[0], [H, W, 3]
     S = tstamps.shape[0]
 
     H, W, _ = image_list[0].shape

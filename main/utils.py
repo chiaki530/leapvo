@@ -2,21 +2,15 @@ from copy import deepcopy
 
 import matplotlib.pyplot as plt
 import numpy as np
-from evo.core import sync
-from evo.core.trajectory import PosePath3D, PoseTrajectory3D
-from evo.tools import plot
 from pathlib import Path
-from evo.core import lie_algebra, sync, metrics
-import evo.common_ape_rpe as common
+from evo.core.trajectory import PosePath3D, PoseTrajectory3D
+from evo.core import sync
 from evo.core.metrics import PoseRelation, Unit
 import evo.main_ape as main_ape
 import evo.main_rpe as main_rpe
 from evo.tools import plot, file_interface
 
-import  networkx as nx
 from matplotlib.collections import LineCollection
-
-import pdb
 
 def make_traj(args) -> PoseTrajectory3D:
     if isinstance(args, tuple) or isinstance(args, list):
@@ -116,8 +110,6 @@ def plot_trajectory(pred_traj, gt_traj=None, title="", filename="", align=True, 
             pred_traj.timestamps = gt_traj.timestamps
         else:
             print("WARNING", pred_traj.timestamps.shape[0],gt_traj.timestamps.shape[0])
-            # pdb.set_trace()
-
         
         gt_traj, pred_traj = sync.associate_trajectories(gt_traj, pred_traj)
 
@@ -222,7 +214,6 @@ def save_pips_plot(rgbs, trajs, trajs_gt, save_name, save_dir, start_idx, valid_
         ate = np.linalg.norm(trajs[s] - trajs_gt[s], axis=1).mean()
         masked_ate = np.linalg.norm(trajs[s][mask[s]] - trajs_gt[s][mask[s]], axis=1).mean()
         
-        # pdb.set_trace()
         ax.set_title(f'T={start_idx + s}, masked_ate={masked_ate:.3f}, valid={valid_label[s,::stride].sum()}', fontsize=5, pad=0)
         ax.imshow(rgbs[s].transpose(1,2,0))
         # axis[s].scatter(trajs[s,::stride,0], trajs[s,::stride,1], s=1)
@@ -249,19 +240,3 @@ def save_pips_plot(rgbs, trajs, trajs_gt, save_name, save_dir, start_idx, valid_
     fig.savefig(f'{save_dir}/{save_name}.png', dpi=300)
     print(f"save to {save_dir}/{save_name}")
     plt.close()
-
-def save_edge_plot(ii, jj, kk, save_name, save_dir):
-    G = nx.Graph()
-    
-    num_E = ii.shape[0]
-    
-    print("num_E", num_E)
-    print("patch nodes", np.unique(kk))
-    G.add_nodes_from(np.unique(kk))
-    frame_nodes = [f"I{x}" for x in np.unique(jj)]
-    G.add_nodes_from(frame_nodes)
-    for idx in range(num_E):
-        G.add_edge(kk[idx], f"I{jj[idx]}")
-    nx.draw(G, with_labels=True)
-    plt.savefig(f'{save_dir}/{save_name}.png')
-    print(f"save to {save_dir}/{save_name}")
