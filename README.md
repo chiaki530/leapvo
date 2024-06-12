@@ -42,7 +42,6 @@ unzip eigen-3.4.0.zip -d thirdparty
 pip install .
 ```
 
-
 ## Demos
 Our method requires an RGB video and camera intrinsics as input. We provide the model checkpoint and example data on [Google Drive](https://drive.google.com/drive/folders/1muTSIpAvm61YrSZJhOrybcvd34BZ3wK7?usp=sharing). Please download `leap_kernel.pth` and place it in the `weights` folder, and download `samples` and place them in the `data` folder.
 
@@ -51,7 +50,7 @@ The demo can be run via
 python main/eval.py \
     --config-path=../configs \
     --config-name=demo \                          # config file
-    data.imagedir=data/samples/sintel_market_5 \  # path to image directory
+    data.imagedir=data/samples/sintel_market_5 \  # path to image directory or video
     data.savedir=logs/sintel_market_5 \           # save directory
     data.calib=calibs/sintel_market_5.txt \       # calibration file
     data.name=sintel_market_5 \                   # scene name
@@ -78,7 +77,7 @@ bash scripts/eval_sintel.sh
 ```
 
 ### TartanAir-Shibuya
-Follow [TartanAir-Shibuya](https://github.com/haleqiu/tartanair-shibuya) and download it to the `data' folder. Then run the evaluation script after setting the `DATASET` variable to custom location. 
+Follow [TartanAir-Shibuya](https://github.com/haleqiu/tartanair-shibuya) and download it to the `data` folder. Then run the evaluation script after setting the `DATASET` variable to custom location. 
 
 ```
 bash scripts/eval_shibuya.sh
