@@ -11,12 +11,10 @@ do
     --config-path=../configs \
     --config-name=sintel \
     data.imagedir=$SCENE_PATH \
-    data.gt_traj=$DATASET/cam_traj/$SCENE/traj_w_c_tum.txt \
+    data.gt_traj=$DATASET/camdata_left/$SCENE \
     data.savedir=$SAVEDIR \
     data.calib=$DATASET/camdata_left/$SCENE \
     data.name=sintel-$SCENE \
-    save_video=false \
-    save_plot=true \
-    save_trajectory=true \
+    save_video=false  
 done
 

@@ -35,7 +35,7 @@ def cam_read_sintel(filename):
     N = np.fromfile(f,dtype='float64',count=12).reshape((3,4))
     return M,N
 
-def sintel_stream(queue, imagedir, calib_root, stride, skip=0):
+def sintel_stream(imagedir, calib_root, stride, skip=0):
     """ image generator """
 
     img_exts = ["*.png", "*.jpeg", "*.jpg"]
@@ -64,7 +64,7 @@ def sintel_stream(queue, imagedir, calib_root, stride, skip=0):
     yield (-1, image, intrinsics) 
   
 
-def dataset_stream(queue, imagedir, calib, stride, skip=0, mode='replica'):
+def dataset_stream(imagedir, calib, stride, skip=0, mode='replica'):
     """ image generator """
 
     calib = np.loadtxt(calib, delimiter=" ")
@@ -78,6 +78,7 @@ def dataset_stream(queue, imagedir, calib, stride, skip=0, mode='replica'):
 
     img_exts = ["*.png", "*.jpeg", "*.jpg"]
     image_list = sorted(chain.from_iterable(Path(imagedir).glob(e) for e in img_exts))[skip::stride]
+    
     # for replica
     if mode == 'replica':
         image_list = sorted(image_list, key=lambda x: int(str(x).split('/')[-1].split('.')[0].split('_')[-1]))
@@ -98,10 +99,8 @@ def dataset_stream(queue, imagedir, calib, stride, skip=0, mode='replica'):
         h, w, _ = image.shape
         image = image[:h-h%16, :w-w%16]
 
-        # queue.put((t, image, intrinsics))
         yield (t, image, intrinsics)
 
-    # queue.put((-1, image, intrinsics))
     yield (-1, image, intrinsics)
     
     
@@ -150,49 +149,7 @@ def replica_stream(scene_dir, calib, stride, skip=0):
     yield (-1, image, depth, intrinsics, Ts_full_ctow[0])
     
     
-def image_stream(queue, imagedir, calib, stride, skip=0):
-    """ image generator """
-
-    calib = np.loadtxt(calib, delimiter=" ")
-    fx, fy, cx, cy = calib[:4]
-
-    K = np.eye(3)
-    K[0,0] = fx
-    K[0,2] = cx
-    K[1,1] = fy
-    K[1,2] = cy
-
-    img_exts = ["*.png", "*.jpeg", "*.jpg"]
-    image_list = sorted(chain.from_iterable(Path(imagedir).glob(e) for e in img_exts))[skip::stride]
-
-    # for replica
-    if RUN_REPLICA:
-        image_list = sorted(image_list, key=lambda x: int(str(x).split('/')[-1].split('.')[0].split('_')[-1]))
-
-    for t, imfile in enumerate(image_list):
-        # image = cv2.imread(str(imfile))
-        image = load_image(str(imfile))
-        if len(calib) > 4:
-            image = cv2.undistort(image, K, calib[4:])
-
-        if 0:
-            image = cv2.resize(image, None, fx=0.5, fy=0.5)
-            intrinsics = np.array([fx / 2, fy / 2, cx / 2, cy / 2])
-
-        else:
-            intrinsics = np.array([fx, fy, cx, cy])
-            
-        h, w, _ = image.shape
-        image = image[:h-h%16, :w-w%16]
-
-        # queue.put((t, image, intrinsics))
-        yield (t, image, intrinsics, str(imfile))   
-
-    # queue.put((-1, image, intrinsics))
-    yield (-1, image, intrinsics, "")
-
-
-def video_stream(queue, imagedir, calib, stride, skip=0):
+def video_stream(imagedir, calib, stride, skip=0):
     """ video generator """
 
     calib = np.loadtxt(calib, delimiter=" ")

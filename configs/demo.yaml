@@ -50,7 +50,7 @@ data:
   gt_traj: ''
   name: ''
   savedir: ''
-  traj_format: sintel
+  traj_format: tum
 
 model:
   S: 8
@@ -80,11 +80,11 @@ model:
     in_dim: 128
     hidden_dim: 256
     S: 8
-  init_dir: weights/resume_cauchy_delta_notime_anchor_nll1_50k_lr3e-4_20231114/11-15_01-40-57/checkpoints/cotracker_kernel_v2_final.pth
+  init_dir: weights/leap_kernel.pth
 
-exp_name: 'leapvo_sintel'
+exp_name: 'leapvo_demo'
 output_dir: ''
 save_trajectory: true
-save_video: false
+save_video: true
 save_plot: true
 viz: false

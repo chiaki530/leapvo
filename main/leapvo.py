@@ -91,15 +91,6 @@ class LEAPVO:
         if self.cfg.viz:
             self.start_viewer()
 
-        # evaluation
-        self.save_dir = os.path.join(self.cfg.output_dir, self.cfg.exp_name)
-        os.makedirs(self.save_dir, exist_ok=True)
-        self.metrics = {
-            'ate': [],
-            'ate_masked': []
-        }
-         
-
         # cache 
         self.cache_window = []
         self.invalid_frames = []

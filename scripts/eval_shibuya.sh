@@ -14,10 +14,7 @@ do
     data.savedir=$SAVEDIR \
     data.calib=calibs/tartan_shibuya.txt \
     data.name=replica-$SCENE-$SEQ \
-    data.traj_format=tartan_shibuya \
-    save_video=false \
-    save_plot=true \
-    save_trajectory=true 
+    save_video=false 
 done
 
 

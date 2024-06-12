@@ -16,10 +16,7 @@ do
         data.savedir=$SAVEDIR \
         data.calib=calibs/replica.txt \
         data.name=replica-$SCENE-$SEQ \
-        data.traj_format=replica \
-        save_video=false \
-        save_plot=true \
-        save_trajectory=true 
+        save_video=false 
     done
 done
 

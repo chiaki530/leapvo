@@ -1,3 +1,4 @@
+import os
 from copy import deepcopy
 
 import matplotlib.pyplot as plt
@@ -9,8 +10,120 @@ from evo.core.metrics import PoseRelation, Unit
 import evo.main_ape as main_ape
 import evo.main_rpe as main_rpe
 from evo.tools import plot, file_interface
+from scipy.spatial.transform import Rotation
 
-from matplotlib.collections import LineCollection
+
+import pdb
+
+
+def sintel_cam_read(filename):
+    """ Read camera data, return (M,N) tuple.
+    
+    M is the intrinsic matrix, N is the extrinsic matrix, so that
+
+    x = M*N*X,
+    with x being a point in homogeneous image pixel coordinates, X being a
+    point in homogeneous world coordinates.
+    """
+    TAG_FLOAT = 202021.25
+
+    f = open(filename,'rb')
+    check = np.fromfile(f,dtype=np.float32,count=1)[0]
+    assert check == TAG_FLOAT, ' cam_read:: Wrong tag in flow file (should be: {0}, is: {1}). Big-endian machine? '.format(TAG_FLOAT,check)
+    M = np.fromfile(f,dtype='float64',count=9).reshape((3,3))
+    N = np.fromfile(f,dtype='float64',count=12).reshape((3,4))
+    return M,N
+
+
+def load_replica_traj(gt_file):
+    traj_w_c = np.loadtxt(gt_file)
+    assert traj_w_c.shape[1] == 12 or traj_w_c.shape[1] == 16
+    poses = [np.array([[r[0], r[1], r[2], r[3]],
+                       [r[4], r[5], r[6], r[7]],
+                       [r[8], r[9], r[10], r[11]],
+                       [0, 0, 0, 1]]) for r in traj_w_c]
+    
+    pose_path = PosePath3D(poses_se3=poses)
+    timestamps_mat = np.arange(traj_w_c.shape[0]).astype(float)
+    
+    traj = PoseTrajectory3D(poses_se3=pose_path.poses_se3, timestamps=timestamps_mat)
+    xyz = traj.positions_xyz
+    # shift -1 column -> w in back column
+    quat = np.roll(traj.orientations_quat_wxyz, -1, axis=1)
+    
+    traj_tum = np.column_stack((xyz, quat))
+    return (traj_tum, timestamps_mat)
+
+def load_sintel_traj(gt_file):
+    # Refer to ParticleSfM
+    gt_pose_lists = sorted(os.listdir(gt_file))
+    gt_pose_lists = [os.path.join(gt_file,x) for x in gt_pose_lists]
+    tstamps = [float(x.split('/')[-1][:-4].split("_")[-1]) for x in gt_pose_lists]
+    gt_poses = [sintel_cam_read(f)[1] for f in gt_pose_lists]
+    xyzs, wxyzs = [], []
+    tum_gt_poses = []
+    for gt_pose in gt_poses:
+        gt_pose = np.concatenate([gt_pose, np.array([[0,0,0,1]])], 0)
+        gt_pose_inv = np.linalg.inv(gt_pose) # world2cam -> cam2world
+        xyz = gt_pose_inv[:3,-1]
+        xyzs.append(xyz)
+        R = Rotation.from_matrix(gt_pose_inv[:3,:3])
+        xyzw = R.as_quat() # scalar-last for scipy
+        wxyz = np.array([xyzw[-1], xyzw[0], xyzw[1], xyzw[2]])
+        wxyzs.append(wxyz)
+        tum_gt_pose = np.concatenate([xyz, xyzw], 0)
+        tum_gt_poses.append(tum_gt_pose)
+
+    tum_gt_poses = np.stack(tum_gt_poses, 0)
+    tum_gt_poses[:,:3] = tum_gt_poses[:,:3] - np.mean(tum_gt_poses[:,:3], 0, keepdims=True)
+    tt = np.expand_dims(np.stack(tstamps, 0), -1)
+    return tum_gt_poses, tt
+
+
+def load_traj(gt_traj_file, traj_format='replica', skip=0, stride=1):
+    """  Read trajectory format. Returns in TUM-RGBD format. 
+    Returns:
+        traj_tum (N, 7): camera to world poses in (x,y,z,qx,qy,qz,qw)
+        timestamps_mat (N, 1): timestamps
+    """
+    if traj_format == 'replica':
+        traj_tum, timestamps_mat = load_replica_traj(gt_traj_file)
+    elif traj_format == 'sintel':
+        traj_tum, timestamps_mat = load_sintel_traj(gt_traj_file)
+    elif traj_format in ['tum', 'tartanair']:
+        traj = file_interface.read_tum_trajectory_file(gt_traj_file)
+        xyz = traj.positions_xyz
+        # shift -1 column -> w in back column
+        quat = np.roll(traj.orientations_quat_wxyz, -1, axis=1)
+        timestamps_mat = traj.timestamps
+        traj_tum = np.column_stack((xyz, quat))
+    else:
+        raise NotImplementedError
+
+    traj_tum = traj_tum[skip::stride]
+    timestamps_mat = timestamps_mat[skip::stride]
+    return traj_tum, timestamps_mat
+
+
+def update_timestamps(gt_file, traj_format, skip=0, stride=1):
+    """Update timestamps given a 
+    """
+    if traj_format == 'tum':
+        traj_t_map_file = gt_file.replace('groundtruth.txt', 'rgb.txt')
+        timestamps = load_timestamps(traj_t_map_file, traj_format)
+        return timestamps[skip::stride]
+    elif traj_format == 'tartanair':
+        traj_t_map_file = gt_file.replace('gt_pose.txt', 'times.txt')
+        timestamps = load_timestamps(traj_t_map_file, traj_format)
+        return timestamps[skip::stride]
+    
+
+def load_timestamps(time_file, traj_format='replica'):
+    if traj_format in ['tum', 'tartanair']:
+        with open(time_file, 'r+') as f:
+            lines = f.readlines()
+        timestamps_mat = [float(x.split(' ')[0]) for x in lines if not x.startswith('#')]
+        return timestamps_mat
 
 def make_traj(args) -> PoseTrajectory3D:
     if isinstance(args, tuple) or isinstance(args, list):
@@ -19,37 +132,7 @@ def make_traj(args) -> PoseTrajectory3D:
     assert isinstance(args, PoseTrajectory3D), type(args)
     return deepcopy(args)
 
-def best_plotmode(traj):
-    _, i1, i2 = np.argsort(np.var(traj.positions_xyz, axis=0))
-    plot_axes = "xyz"[i2] + "xyz"[i1]
-    return getattr(plot.PlotMode, plot_axes)
 
-def load_timestamps(time_file, traj_format='replica'):
-    if traj_format in ['tum', 'tartan_shibuya']:
-        with open(time_file, 'r+') as f:
-            lines = f.readlines()
-        timestamps_mat = [float(x.split(' ')[0]) for x in lines if not x.startswith('#')]
-        return timestamps_mat
-
-def load_traj(gt_traj_file, traj_format='replica', skip=0, stride=1):
-    gt_traj = None
-    if gt_traj_file == '':
-        return gt_traj
-    
-    if traj_format in ['replica']:
-        gt_traj = load_replica_traj(gt_traj_file, skip=skip, stride=stride)
-        return gt_traj
-    elif traj_format in ['tum', 'tartan_shibuya', 'sintel', 'kitti_tum']:
-        traj = file_interface.read_tum_trajectory_file(gt_traj_file)
-        xyz = traj.positions_xyz
-        # shift -1 column -> w in back column
-        quat = np.roll(traj.orientations_quat_wxyz, -1, axis=1)
-
-        # timestamps_mat = np.arange(xyz.shape[0]).astype(float)
-        timestamps_mat = traj.timestamps
-        traj_tum = np.column_stack((xyz, quat))
-        return (traj_tum, timestamps_mat)
-    
 def eval_metrics(pred_traj, gt_traj=None, seq="", filename=""):
     pred_traj = make_traj(pred_traj)
     
@@ -101,6 +184,13 @@ def eval_metrics(pred_traj, gt_traj=None, seq="", filename=""):
     print(f"Save results to {filename}")
     return ate, rpe_trans, rpe_rot
 
+
+def best_plotmode(traj):
+    _, i1, i2 = np.argsort(np.var(traj.positions_xyz, axis=0))
+    plot_axes = "xyz"[i2] + "xyz"[i1]
+    return getattr(plot.PlotMode, plot_axes)
+
+
 def plot_trajectory(pred_traj, gt_traj=None, title="", filename="", align=True, correct_scale=True):
     pred_traj = make_traj(pred_traj)
 
@@ -127,7 +217,7 @@ def plot_trajectory(pred_traj, gt_traj=None, title="", filename="", align=True, 
     plot_collection.add_figure("traj (error)", fig)
     plot_collection.export(filename, confirm_overwrite=False)
     plt.close(fig=fig)
-    print(f"Saved {filename}")
+    print(f"Saved trajectory to {filename}")
 
 def save_trajectory_tum_format(traj, filename):
     traj = make_traj(traj)
@@ -135,108 +225,7 @@ def save_trajectory_tum_format(traj, filename):
     with Path(filename).open('w') as f:
         for i in range(traj.num_poses):
             f.write(f"{traj.timestamps[i]} {tostr(traj.positions_xyz[i])} {tostr(traj.orientations_quat_wxyz[i][[1,2,3,0]])}\n")
-    print(f"Saved {filename}")
-
-
-def load_gt_traj(gt_file, traj_format='kitti', skip=0, stride=1):
-
-
-    traj_w_c = np.loadtxt(gt_file)
-    traj_w_c = traj_w_c[skip::stride]
-    assert traj_w_c.shape[1] == 12 or traj_w_c.shape[1] == 16
-    
-    poses = [np.array([[r[0], r[1], r[2], r[3]],
-                    [r[4], r[5], r[6], r[7]],
-                    [r[8], r[9], r[10], r[11]],
-                    [0, 0, 0, 1]]) for r in traj_w_c]
-    
-    pose_path = PosePath3D(poses_se3=poses)
-    timestamps_mat = np.arange(traj_w_c.shape[0]).astype(float)
-    
-    traj = PoseTrajectory3D(poses_se3=pose_path.poses_se3, timestamps=timestamps_mat)
-    xyz = traj.positions_xyz
-    # shift -1 column -> w in back column
-    quat = np.roll(traj.orientations_quat_wxyz, -1, axis=1)
-    
-    traj_tum = np.column_stack((xyz, quat))
-    return (traj_tum, timestamps_mat)
-
-def load_replica_traj(gt_file, format='kitti', skip=0, stride=1):
-    traj_w_c = np.loadtxt(gt_file)
-    traj_w_c = traj_w_c[skip::stride]
-    assert traj_w_c.shape[1] == 12 or traj_w_c.shape[1] == 16
-    
-    poses = [np.array([[r[0], r[1], r[2], r[3]],
-                       [r[4], r[5], r[6], r[7]],
-                       [r[8], r[9], r[10], r[11]],
-                       [0, 0, 0, 1]]) for r in traj_w_c]
-    
-    pose_path = PosePath3D(poses_se3=poses)
-    timestamps_mat = np.arange(traj_w_c.shape[0]).astype(float)
-    
-    traj = PoseTrajectory3D(poses_se3=pose_path.poses_se3, timestamps=timestamps_mat)
-    xyz = traj.positions_xyz
-    # shift -1 column -> w in back column
-    quat = np.roll(traj.orientations_quat_wxyz, -1, axis=1)
-    
-    traj_tum = np.column_stack((xyz, quat))
-    return (traj_tum, timestamps_mat)
+    print(f"Saved trajectory to {filename}")
 
 
     
-def save_pips_plot(rgbs, trajs, trajs_gt, save_name, save_dir, start_idx, valid_label=None, valid_gt=None):
-    S, N = trajs.shape[:2]
-    H, W = rgbs.shape[-2:]
-    stride = 1
-    margin = 100
-    
-    num_row = (S-1)//4 + 1
-    num_col = min(S, 4)
-    fig, axis = plt.subplots((S-1)//4 + 1, 4, figsize=(2 * num_col, 1.5 * num_row))
-    
-    # mask = gt in boundaries & trajs is valid
-    mask = (np.ones((S,N)) > 0)
-    if valid_label is not None:
-        mask = mask & valid_label
-    if valid_gt is not None:
-        mask = mask & valid_gt
-    #  padding = 0
-    #  mask = (trajs_gt[...,0] >= padding) & (trajs_gt[...,0] < W - padding) & (trajs_gt[...,1] >= padding) & (trajs_gt[...,1] < H - padding) 
-
-    for s in range(S):
-        row = s // 4
-        col = s % 4
-        if S <= 4:
-            ax = axis[col]
-        else:
-            ax = axis[row, col]
-        
-        ate = np.linalg.norm(trajs[s] - trajs_gt[s], axis=1).mean()
-        masked_ate = np.linalg.norm(trajs[s][mask[s]] - trajs_gt[s][mask[s]], axis=1).mean()
-        
-        ax.set_title(f'T={start_idx + s}, masked_ate={masked_ate:.3f}, valid={valid_label[s,::stride].sum()}', fontsize=5, pad=0)
-        ax.imshow(rgbs[s].transpose(1,2,0))
-        # axis[s].scatter(trajs[s,::stride,0], trajs[s,::stride,1], s=1)
-        if valid_label is not None:
-            pts_vis = trajs[s,::stride][valid_label[s,::stride]]
-            pts_occ = trajs[s,::stride][~valid_label[s,::stride]]
-            ax.scatter(trajs_gt[s,::stride,0], trajs_gt[s,::stride,1], s=0.5, color='y', marker='^')
-            ax.scatter(pts_vis[...,0], pts_vis[...,1], s=0.5, color='g', alpha=0.5)
-            ax.scatter(pts_occ[...,0], pts_occ[...,1], s=0.5, color='r', alpha=0.5)
-
-            # plot lines
-            segs = [[(x[0], x[1]), (y[0], y[1])] for x, y in zip(trajs[s,::stride][mask[s,::stride]], trajs_gt[s,::stride][mask[s,::stride]])]
-            line_segments = LineCollection(segs,
-                               linewidths=0.5,
-                               linestyles='-')
-            ax.add_collection(line_segments)
-        else:
-            ax.scatter(trajs[s,::stride,0], trajs[s,::stride,1], s=1, color='g')
-        ax.set_axis_off()
-        ax.set_xlim(0-margin, W+margin)
-        ax.set_ylim(H+margin, 0-margin)    # flip, otherwise would be upside down
-        
-    fig.tight_layout()
-    fig.savefig(f'{save_dir}/{save_name}.png', dpi=300)
-    print(f"save to {save_dir}/{save_name}")
-    plt.close()

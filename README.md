@@ -1,6 +1,5 @@
-[![arXiv](https://img.shields.io/badge/arXiv-LEAPVO-red)](https://arxiv.org/abs/2403.18913)
-
 # LEAP-VO: Long-term Effective Any Point Tracking for Visual Odometry
+
 **[CVPR 2024]** The repository contains the official implementation of [LEAP-VO](https://github.com/chiaki530/leapvo). We aim to leverage **temporal context with long-term point tracking** to achieve motion estimation, occlusion handling, and track probability modeling.
 
 
@@ -10,10 +9,14 @@
 
 **[[Paper](https://arxiv.org/abs/2401.01887)] [[Project Page](https://chiaki530.github.io/projects/leapvo/)]**
 
-<!-- ## Todo
-- [ ] Improve LEAPVO visualization.
-- [ ] Release LEAPVO training code.
-- [ ] Release LEAPVO inference code and checkpoints. -->
+<div align="center">
+  <p align="center">
+  <a href="">
+    <img src="./assets/demo.gif" alt="Logo" width="70%">
+  </a>
+</p>
+</div>
+
 
 ## Installation
 ### Requirements
@@ -30,18 +33,6 @@ cd leapvo
 conda env create -f environment.yml
 conda activate leapvo
 ```
-<!-- conda create -n leapvo python==3.10 -->
-
-<!-- Install PyTorch and other dependencies
-```
-conda install pytorch=1.12.0 torchvision=0.13.0 cudatoolkit=11.3 -c pytorch
-pip install -r requirements.txt
-``` -->
-
-<!-- Install LieTorch
-```
-pip install git+https://github.com/princeton-vl/lietorch.git
-``` -->
 
 ### Install LEAPVO package
 ```
@@ -53,26 +44,48 @@ pip install .
 
 
 ## Demos
+Our method requires an RGB video and camera intrinsics as input. We provide the model checkpoint and example data on [Google Drive](https://drive.google.com/drive/folders/1muTSIpAvm61YrSZJhOrybcvd34BZ3wK7?usp=sharing). Please download `leap_kernel.pth` and place it in the `weights` folder, and download `samples` and place them in the `data` folder.
 
+The demo can run via
+```
+python main/eval.py \
+    --config-path=../configs \
+    --config-name=demo \                          # config file
+    data.imagedir=data/samples/sintel_market_5 \  # path to image directory
+    data.savedir=logs/sintel_market_5 \           # save directory
+    data.calib=calibs/sintel_market_5.txt \       # calibration file
+    data.name=sintel_market_5 \                   # scene name
+    save_trajectory=true \                        # save trajectory in TUM format
+    save_video=true \                             # save video visualization
+    save_plot=true                                # save trajectory plot
+```
 
-## Evaluation
+## Evaluations
 We provide evaluation scripts for MPI-Sinel, AirDOS-Shibuya, and Replica.
+
 ### MPI-Sintel
-Follow [MPI-Sintel](http://sintel.is.tue.mpg.de/) and download it to the data folder. For evaluation, we also need to download the [groundtruth camera pose data](http://sintel.is.tue.mpg.de/depth). 
+Follow [MPI-Sintel](http://sintel.is.tue.mpg.de/) and download it to the `data` folder. For evaluation, we also need to download the [groundtruth camera pose data](http://sintel.is.tue.mpg.de/depth). The folder structure should look like
+```
+MPI-Sintel-complete
+└── training
+    ├── final
+    └── camdata_left
+```
+
+Then run the evaluation script after setting the `DATASET` variable to custom location. 
+```
+bash scripts/eval_sintel.sh
+```
+
+### TartanAir-Shibuya
+Follow [TartanAir-Shibuya](https://github.com/haleqiu/tartanair-shibuya) and download it to the `data' folder. Then run the evaluation script after setting the `DATASET` variable to custom location. 
 
 ```
 bash scripts/eval_shibuya.sh
 ```
 
-### TartanAir-Shibuya
-Follow [TartanAir-Shibuya](https://github.com/haleqiu/tartanair-shibuya) and download it to the data folder.
-
-```
-bash scripts/eval/run_cotrackerslam_tartanair_shibuya_cvpr.sh
-```
-
 ### Replica 
-Follow [Semantic-NeRF](https://github.com/Harry-Zhi/semantic_nerf/) and download the Replica dataset into data folder.
+Follow [Semantic-NeRF](https://github.com/Harry-Zhi/semantic_nerf/) and download the Replica dataset into data folder. Then run the evaluation script after setting the `DATASET` variable to custom location. 
 ```
 bash scripts/eval_replica.sh
 ```
@@ -80,18 +93,14 @@ bash scripts/eval_replica.sh
 ## Citations
 If you find our repository useful, please consider citing our paper in your work:
 ```
-@article{chen2024leap,
+@InProceedings{chen2024leap,
   title={LEAP-VO: Long-term Effective Any Point Tracking for Visual Odometry},
   author={Chen, Weirong and Chen, Le and Wang, Rui and Pollefeys, Marc},
-  journal={arXiv preprint arXiv:2401.01887},
+  journal={IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
   year={2024}
 }
 ```
 ## Acknowledgement
-LEAP-VO is built on [CoTracker](https://github.com/facebookresearch/co-tracker) and [DPVO](https://github.com/princeton-vl/DPVO). 
-We sincerely thank the authors for publicly releasing their great work.
+We adapted some codes from some awesome repositories including [CoTracker](https://github.com/facebookresearch/co-tracker), [DPVO](https://github.com/princeton-vl/DPVO), and [ParticleSfM](https://github.com/bytedance/particle-sfm).
+We sincerely thank the authors for open-sourcing their work.
 
-<!-- : , [CoTracker](https://github.com/facebookresearch/co-tracker), [TAP-Vid](https://github.com/google-deepmind/tapnet), [DPVO](https://github.com/princeton-vl/DPVO), [ParticleSfM](https://github.com/bytedance/particle-sfm).  -->
-
-
-<!-- ## License -->
