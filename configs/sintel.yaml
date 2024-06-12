@@ -1,0 +1,90 @@
+slam:
+  MOTION_DAMPING: 0.5
+  MOTION_MODEL: 'DAMPED_LINEAR'
+
+  REMOVAL_WINDOW: 20
+  OPTIMIZATION_WINDOW: 15
+  PATCH_LIFETIME: 12
+
+  PATCHES_PER_FRAME: 100
+  BUFFER_SIZE: 1024
+
+  PATCH_GEN: grid_grad_10
+  
+  ITER: 4
+
+  LOSS: huber
+
+  USE_MAP_FILTERING: true
+  MAP_FILTERING_TH: 5
+  MIN_TRACK_LEN: 3
+  TRAJ_INIT: false
+
+  VIS_THRESHOLD: 0.9
+  STATIC_THRESHOLD: 0.1
+  STATIC_QUANTILE: 0.0
+  CONF_THRESHOLD: 1.0
+  CONF_QUANTILE: 0.8
+  
+  S_slam: 12
+  kf_stride: 2
+  num_init: 8
+  backward_tracking: true
+
+visualizer:
+  save_dir: "./results"
+  grayscale: false
+  pad_value: 0
+  fps: 10
+  mode: "rainbow"  # 'cool', 'optical_flow'
+  linewidth: 2
+  show_first_frame: 10
+  tracks_leave_trace: 8  # -1 for infinite
+
+data:
+  imagedir: ''
+  calib: ''
+  stride: 1
+  skip: 0
+  max_length: 900
+  gt_traj: ''
+  name: ''
+  savedir: ''
+  traj_format: sintel
+
+model:
+  S: 8
+  I: 4
+  stride: 4
+
+  mode: leap_kernel
+  sliding_window_len: 8
+  model_stride: 4
+  hidden_dim: 256
+  latent_dim: 128
+  corr_levels: 4
+  corr_radius: 3
+  add_space_attn: true
+  space_depth: 6
+  time_depth: 6
+  hidden_size: 384
+  num_heads: 8
+  kernel_from_delta: true
+  kernel_block:
+    kernel_list:
+    - linear
+    composition: sum
+    add_time: false
+  motion_label_block:
+    mode: mlp_v1
+    in_dim: 128
+    hidden_dim: 256
+    S: 8
+  init_dir: weights/leap_kernel.pth
+
+exp_name: 'leapvo_sintel'
+output_dir: ''
+save_trajectory: true
+save_video: true
+save_plot: true
+viz: false

@@ -1,0 +1,17 @@
+*~
+*#*
+*pyc
+#.*
+.DS_Store
+*.out
+*.zip
+slurm_logs
+logs_*
+log_*
+__pycache__
+logs
+outputs
+weights
+build
+data
+thirdparty
