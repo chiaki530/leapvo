@@ -46,7 +46,7 @@ pip install .
 ## Demos
 Our method requires an RGB video and camera intrinsics as input. We provide the model checkpoint and example data on [Google Drive](https://drive.google.com/drive/folders/1muTSIpAvm61YrSZJhOrybcvd34BZ3wK7?usp=sharing). Please download `leap_kernel.pth` and place it in the `weights` folder, and download `samples` and place them in the `data` folder.
 
-The demo can run via
+The demo can be run via
 ```
 python main/eval.py \
     --config-path=../configs \
