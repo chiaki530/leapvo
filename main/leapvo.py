@@ -742,6 +742,8 @@ class LEAPVO:
         poses = poses.inv().data.cpu().numpy()
         tstamps = np.array(self.tlist, dtype=float)
 
+        poses = poses[:,[0,1,2,6,3,4,5]]  # tx ty tz qx qy qz qw -> tx ty tz qw qx qy qz
+        
         if self.viewer is not None:
             self.viewer.join()
 

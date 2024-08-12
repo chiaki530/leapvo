@@ -57,7 +57,8 @@ def load_replica_traj(gt_file):
     traj = PoseTrajectory3D(poses_se3=pose_path.poses_se3, timestamps=timestamps_mat)
     xyz = traj.positions_xyz
     # shift -1 column -> w in back column
-    quat = np.roll(traj.orientations_quat_wxyz, -1, axis=1)
+    # quat = np.roll(traj.orientations_quat_wxyz, -1, axis=1)
+    quat = traj.orientations_quat_wxyz
 
     traj_tum = np.column_stack((xyz, quat))
     return (traj_tum, timestamps_mat)
@@ -80,7 +81,7 @@ def load_sintel_traj(gt_file):
         xyzw = R.as_quat()  # scalar-last for scipy
         wxyz = np.array([xyzw[-1], xyzw[0], xyzw[1], xyzw[2]])
         wxyzs.append(wxyz)
-        tum_gt_pose = np.concatenate([xyz, xyzw], 0)
+        tum_gt_pose = np.concatenate([xyz, wxyz], 0)
         tum_gt_poses.append(tum_gt_pose)
 
     tum_gt_poses = np.stack(tum_gt_poses, 0)
@@ -101,11 +102,21 @@ def load_traj(gt_traj_file, traj_format="replica", skip=0, stride=1):
         traj_tum, timestamps_mat = load_replica_traj(gt_traj_file)
     elif traj_format == "sintel":
         traj_tum, timestamps_mat = load_sintel_traj(gt_traj_file)
-    elif traj_format in ["tum", "tartanair"]:
+    elif traj_format == 'tartanair':
+        traj = file_interface.read_tum_trajectory_file(gt_traj_file)
+        xyz = traj.positions_xyz
+        xyz = xyz[:,[1,2,0]]
+        quat = traj.orientations_quat_wxyz
+        quat = quat[:,[0,2,3,1]]
+        timestamps_mat = traj.timestamps
+        traj_tum = np.column_stack((xyz, quat))
+    elif traj_format == "tum":
         traj = file_interface.read_tum_trajectory_file(gt_traj_file)
         xyz = traj.positions_xyz
         # shift -1 column -> w in back column
-        quat = np.roll(traj.orientations_quat_wxyz, -1, axis=1)
+        # quat = np.roll(traj.orientations_quat_wxyz, -1, axis=1)
+        quat = traj.orientations_quat_wxyz
+        
         timestamps_mat = traj.timestamps
         traj_tum = np.column_stack((xyz, quat))
     else:
