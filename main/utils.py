@@ -53,6 +53,7 @@ def load_replica_traj(gt_file):
     
     traj_tum = np.column_stack((xyz, quat))
     return (traj_tum, timestamps_mat)
+    # return traj
 
 def load_sintel_traj(gt_file):
     # Refer to ParticleSfM
@@ -60,19 +61,26 @@ def load_sintel_traj(gt_file):
     gt_pose_lists = [os.path.join(gt_file,x) for x in gt_pose_lists]
     tstamps = [float(x.split('/')[-1][:-4].split("_")[-1]) for x in gt_pose_lists]
     gt_poses = [sintel_cam_read(f)[1] for f in gt_pose_lists]
-    xyzs, wxyzs = [], []
+    # xyzs, wxyzs = [], []
     tum_gt_poses = []
     for gt_pose in gt_poses:
         gt_pose = np.concatenate([gt_pose, np.array([[0,0,0,1]])], 0)
         gt_pose_inv = np.linalg.inv(gt_pose) # world2cam -> cam2world
         xyz = gt_pose_inv[:3,-1]
-        xyzs.append(xyz)
+        # xyzs.append(xyz)
         R = Rotation.from_matrix(gt_pose_inv[:3,:3])
         xyzw = R.as_quat() # scalar-last for scipy
-        wxyz = np.array([xyzw[-1], xyzw[0], xyzw[1], xyzw[2]])
-        wxyzs.append(wxyz)
+        # wxyz = np.array([xyzw[-1], xyzw[0], xyzw[1], xyzw[2]])
+        # wxyzs.append(wxyz)
         tum_gt_pose = np.concatenate([xyz, xyzw], 0)
         tum_gt_poses.append(tum_gt_pose)
+        
+        # tum_gt_poses.append(gt_pose_inv)
+        
+    # tum_gt_poses = np.stack(tum_gt_poses, 0)
+    # tt = np.expand_dims(np.stack(tstamps, 0), -1)
+    # traj = PoseTrajectory3D(poses_se3=tum_gt_poses, timestamps=tt)
+    # return traj
 
     tum_gt_poses = np.stack(tum_gt_poses, 0)
     tum_gt_poses[:,:3] = tum_gt_poses[:,:3] - np.mean(tum_gt_poses[:,:3], 0, keepdims=True)
@@ -88,10 +96,13 @@ def load_traj(gt_traj_file, traj_format='replica', skip=0, stride=1):
     """
     if traj_format == 'replica':
         traj_tum, timestamps_mat = load_replica_traj(gt_traj_file)
+        # traj_tum = load_replica_traj(gt_traj_file)
     elif traj_format == 'sintel':
         traj_tum, timestamps_mat = load_sintel_traj(gt_traj_file)
+        # traj_tum = load_sintel_traj(gt_traj_file)
     elif traj_format in ['tum', 'tartanair']:
         traj = file_interface.read_tum_trajectory_file(gt_traj_file)
+        # traj_tum = file_interface.read_tum_trajectory_file(gt_traj_file)
         xyz = traj.positions_xyz
         # shift -1 column -> w in back column
         quat = np.roll(traj.orientations_quat_wxyz, -1, axis=1)
@@ -103,6 +114,7 @@ def load_traj(gt_traj_file, traj_format='replica', skip=0, stride=1):
     traj_tum = traj_tum[skip::stride]
     timestamps_mat = timestamps_mat[skip::stride]
     return traj_tum, timestamps_mat
+    # return traj_tum
 
 
 def update_timestamps(gt_file, traj_format, skip=0, stride=1):
@@ -120,7 +132,7 @@ def update_timestamps(gt_file, traj_format, skip=0, stride=1):
 
 def load_timestamps(time_file, traj_format='replica'):
     if traj_format in ['tum', 'tartanair']:
-        with open(time_file, 'r+') as f:
+        with open(time_file, 'r') as f:
             lines = f.readlines()
         timestamps_mat = [float(x.split(' ')[0]) for x in lines if not x.startswith('#')]
         return timestamps_mat

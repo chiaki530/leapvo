@@ -14,6 +14,8 @@ from main.backend import projective_ops as pops
 from main.backend.ba import BA
 from main.slam_visualizer import LEAPVisualizer
 
+import pdb
+
 def flatmeshgrid(*args, **kwargs):
     grid = torch.meshgrid(*args, **kwargs)
     return (x.reshape(-1) for x in grid)
@@ -79,7 +81,7 @@ class LEAPVO:
         self.targets = torch.zeros(1, 0, 2 , device="cuda")
         self.weights = torch.zeros(1, 0, 2 , device="cuda")
         
-        # initialize poses to identity matrix
+        # initialize poses to identity matrix, xyzw
         self.poses_[:,6] = 1.0
         
         self.local_window = []
@@ -678,6 +680,9 @@ class LEAPVO:
         poses = [self.get_pose(t) for t in range(self.counter)]
         poses = lietorch.stack(poses, dim=0)
         poses = poses.inv().data.cpu().numpy()
+        
+        poses = poses[:,[0,1,2,6,3,4,5]]  # tx ty tz qx qy qz qw -> tx ty tz qw qx qy qz
+        
         tstamps = np.array(self.tlist, dtype=float)
 
         if self.viewer is not None:

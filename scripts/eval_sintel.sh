@@ -1,11 +1,12 @@
 DATASET=./data/MPI-Sintel-complete/training
-SAVEDIR=logs/sintel
+SAVEDIR=logs/sintel_fixed_rotation_gt_pred
 
 mkdir -p $SAVEDIR
 echo $(date "+%Y-%m-%d %H:%M:%S") >> $SAVEDIR/error_sum.txt
-
+# alley_2 ambush_4 ambush_5 ambush_6 cave_2 cave_4 market_2 market_5 market_6 shaman_3 sleeping_1 sleeping_2 temple_2 temple_3
 for SCENE in alley_2 ambush_4 ambush_5 ambush_6 cave_2 cave_4 market_2 market_5 market_6 shaman_3 sleeping_1 sleeping_2 temple_2 temple_3
 do
+    SCENE=rgbd_bonn_${NAME}  
     SCENE_PATH=$DATASET/final/$SCENE
     python main/eval.py \
     --config-path=../configs \
@@ -17,4 +18,5 @@ do
     data.name=sintel-$SCENE \
     save_video=false  
 done
+
 

@@ -10,6 +10,7 @@ from main.leapvo import LEAPVO
 from main.stream import sintel_stream, dataset_stream, video_stream
 from main.utils import plot_trajectory, save_trajectory_tum_format, eval_metrics, load_traj, update_timestamps
 
+import pdb
 
 @hydra.main(version_base=None, config_path="configs", config_name="demo")
 def main(cfg: DictConfig):
@@ -48,6 +49,11 @@ def main(cfg: DictConfig):
 
     if 'gt_traj' in cfg.data and cfg.data.gt_traj != '':
         gt_traj = load_traj(cfg.data.gt_traj, cfg.data.traj_format, skip=cfg.data.skip, stride=cfg.data.stride)
+        # tx ty tz qx qy qz qw -> tx ty tz qw qx qy qz
+        gt_traj_SE3 = gt_traj[0]
+        gt_traj_SE3 = gt_traj_SE3[:,[0,1,2,6,3,4,5]]
+        gt_traj_new =  [gt_traj_SE3, gt_traj[1]]
+        gt_traj = gt_traj_new
     else:
         gt_traj = None
 
